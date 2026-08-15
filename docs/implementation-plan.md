@@ -234,7 +234,7 @@ Suggested commit: `docs: document workspace direnv integration` (the final commi
 
 ## 11. Workspace MCP extension
 
-Status: **source and deterministic unit tests implemented** (one block, committed by the main agent after review). The adapter, Config field, integration wiring, and the deterministic unit/child coverage described in §11.4 below are complete and verified (152 tests, typecheck, build, pack). The remaining §11.4 items — a real MCP SDK fixture under isolated native direnv allow/deny state, process replacement/tools/mask behavior, blocked reload recovery, final process cleanup through real workspace config hot reload, installed rc.6 isolated profile verification, and GitHub publication — are the next block.
+Status: **source, deterministic unit tests, and real MCP SDK + native direnv + WorkspaceTree hot-reload tests implemented** (two blocks, committed by the main agent after review). The adapter, Config field, integration wiring, the deterministic unit/child coverage described in §11.4 below, and the live suite described in the new §11.4 items (real `@modelcontextprotocol/sdk` stdio fixture under repo-isolated native direnv allow/deny state; process replacement, tools/mask behavior, blocked reload recovery, and final process cleanup through real workspace config hot reload; global-row env isolation; `enableWorkspaceMcp: false` transparency) are complete and verified (154 tests, typecheck, build, pack). The remaining §11.4 items — installed rc.6 isolated profile verification, the final bilingual MCP documentation, and GitHub publication — are the next block.
 
 ### 11.1 Scope and ownership
 
@@ -276,9 +276,11 @@ This block (source + deterministic unit tests, no commits) delivered:
 
 The NEXT block will:
 
-- run a real MCP SDK fixture under isolated native direnv allow/deny state;
-- prove process replacement, tools/mask behavior, blocked reload recovery, and final process cleanup through real workspace config hot reload;
+- run a real MCP SDK fixture under isolated native direnv allow/deny state; *(implemented — see below)*
+- prove process replacement, tools/mask behavior, blocked reload recovery, and final process cleanup through real workspace config hot reload; *(implemented — see below)*
 - update bilingual docs (final detailed MCP section), the pack audit, installed rc.6 isolated profile verification, and GitHub publication.
+
+The live block delivered `tests/mcp-live-direnv.spec.ts` plus the self-contained `tests/fixtures/mcp/fixture-server.mjs` (real `@modelcontextprotocol/sdk` `Server`/`StdioServerTransport`, `env_snapshot` + masked tool-list modes, start/exit marker): the real overlay registry with real chokidar hot reload, the real `WorkspaceMcpManager`/`workspace-client`, the real provider/integration, and real direnv under repo-internal isolated XDG/HOME prove an allowed workspace `.envrc` reaches the MCP child with native precedence and credential-shaped visibility, every DSH_* name absent (empty snapshot), manager-resolved cwd, an unwrapped same-serverName global row untouched by workspace reloads, no `.envrc` watcher (v1 process frozen on `.envrc`-only edits), blocked-start reload failure with old-process exit/tools/mask removal while lease and scope stay alive, canary-free blocked diagnostics, re-allow recovery with a fresh pid and v2 environment plus restored mask, final release/dispose with zero process residue, and `enableWorkspaceMcp: false` starting without direnv despite a blocked `.envrc`.
 
 Suggested commits:
 
@@ -288,4 +290,4 @@ test: cover workspace mcp direnv reload
 docs: document workspace mcp direnv
 ```
 
-Completion requires the prior 152 tests plus focused real MCP/direnv/reload tests, strict typecheck, build, pack, no process residue, isolated DSH rc.6 Loader activation, and a clean synchronized remote.
+Completion requires the prior 152 tests plus the focused real MCP/direnv/reload tests (154 total), strict typecheck, build, pack, no process residue, isolated DSH rc.6 Loader activation, and a clean synchronized remote.
