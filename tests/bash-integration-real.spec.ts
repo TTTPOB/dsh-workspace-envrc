@@ -13,7 +13,14 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { defaultConfig, type WorkspaceEnvrcConfig } from '../src/core.js'
 import * as Integration from '../src/integration-plugin.js'
 import WorkspaceEnvrc from '../src/provider.js'
-import { mutableWorkspaceRegistry, okSpawn, RecordingShellExecutor } from './helpers.js'
+import {
+  inertSandbox,
+  inertSubprocess,
+  inertTerminals,
+  mutableWorkspaceRegistry,
+  okSpawn,
+  RecordingShellExecutor,
+} from './helpers.js'
 
 /**
  * REAL background-path harness: the official AgentRegistry (withInitiator +
@@ -53,6 +60,11 @@ async function setup(config: WorkspaceEnvrcConfig = defaultConfig): Promise<Harn
   fibers.push(await ctx.plugin(RecordingShellExecutor))
   fibers.push(await ctx.plugin(ToolBash))
   ctx.provide('workspaceCordis', registry)
+  // The Block C integration row injects these; the Bash path never invokes
+  // them, so inert services satisfy activation without terminal residue.
+  ctx.provide('terminals', inertTerminals())
+  ctx.provide('sandbox', inertSandbox())
+  ctx.provide('subprocess', inertSubprocess())
   const RuntimeProvider = class extends WorkspaceEnvrc {
     constructor(applyCtx: Context) {
       super(applyCtx, config, { spawn: okSpawn() })

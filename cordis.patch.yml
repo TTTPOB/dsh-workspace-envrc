@@ -1,12 +1,15 @@
 # dsh-workspace-envrc bundle patch: register the workspaceEnvrc provider and
 # the integration row that wires its execution adapters.
 #
-# Block A ships the provider core. Block B adds the reversible Bash adapter,
-# installed by the workspace-envrc-integration row below (the row injects
-# agents/shell/workspaceEnvrc, installs the adapter in an effect, and
-# reverse-disposes it on fiber unload). Block C will extend this same
-# integration installer with the persistent-terminal adapter; no additional
-# integration row will be added.
+# Block A ships the provider core. Block B adds the reversible Bash adapter;
+# Block C adds the persistent-terminal adapter (operation-local AsyncLocalStorage
+# over ctx.terminals.spawn, wrapping the ctx.sandbox.confine argv commit seam or
+# the ctx.subprocess.spawnTerminal spec argv with the deferred managed-env
+# wrapper). Both are installed by the single workspace-envrc-integration row
+# below (the row injects agents/shell/sandbox/subprocess/terminals/workspaceEnvrc,
+# installs Bash first then Terminal inside one effect, and reverse-disposes
+# terminal-first then Bash on fiber unload; a failing Terminal install rolls
+# back the already-installed Bash adapter).
 #
 # The provider row's config states the full deployed values explicitly (a
 # patch row replaces the target row's whole config, never a deep merge) so

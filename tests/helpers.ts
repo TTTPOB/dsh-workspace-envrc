@@ -1,10 +1,20 @@
 /**
  * Shared test helpers: a recording shell executor (stubs the `ctx.shell`
  * provider while capturing every resolved request and its trace receiver),
- * a mutable fake `workspaceCordis` registry, and an always-ok preflight
- * spawn seam for the workspaceEnvrc activation gate.
+ * a mutable fake `workspaceCordis` registry, an always-ok preflight spawn
+ * seam for the workspaceEnvrc activation gate, and the recording sandbox /
+ * subprocess fakes the terminal adapter tests use.
  */
+import { PassThrough } from 'node:stream'
+import type { Context } from '@deepseek-ai/cordis'
+import SandboxProvider, { type ConfinedArgv, type SandboxPolicy } from '@deepseek-ai/dsh-sandbox'
 import type { ScopeKey } from '@deepseek-ai/dsh-scope'
+import SubprocessRuntime, {
+  type SubprocessHandle,
+  type SubprocessSpawnSpec,
+  type SubprocessTerminalHandle,
+  type SubprocessTerminalSpawnSpec,
+} from '@deepseek-ai/dsh-subprocess'
 import {
   ShellExecutor,
   type ShellExecRequest,
@@ -91,4 +101,96 @@ export function mutableWorkspaceRegistry(): {
 /** A preflight spawn seam whose children always exit 0. */
 export function okSpawn(): PreflightSpawn {
   return () => ({ kill: () => {}, done: Promise.resolve({ code: 0, signal: null }) })
+}
+
+/**
+ * A concrete `ctx.sandbox` provider that records every confined argv/policy
+ * pair and wraps each argv as `[marker, '--', ...argv]`, mirroring the real
+ * sandbox runners' shape while staying inert (no host confinement). Loaded
+ * through `ctx.plugin(...)` so `ctx.sandbox` is a genuine traceable proxy —
+ * the same target the terminal adapter wraps in production.
+ */
+export class RecordingSandbox extends SandboxProvider {
+  readonly calls: Array<{ argv: readonly string[]; policy: SandboxPolicy }> = []
+
+  constructor(
+    ctx: Context,
+    private readonly marker = '/sandbox',
+  ) {
+    super(ctx)
+  }
+
+  confine(argv: readonly string[], policy: SandboxPolicy): ConfinedArgv {
+    this.calls.push({ argv, policy })
+    return {
+      argv: [this.marker, '--', ...argv],
+      enforcement: 'full',
+      denialSignatures: [],
+      runnerFailureRules: [],
+    }
+  }
+}
+
+/** A terminal handle whose output ends on terminate, so backend close settles. */
+export function fakeTerminalHandle(pid = 123): SubprocessTerminalHandle {
+  const output = new PassThrough()
+  return {
+    pid,
+    output,
+    done: Promise.resolve({ exitCode: 0, signal: null }),
+    write: async () => {},
+    inspectForeground: async () => ({ processGroupId: pid, inputWaiting: true }),
+    signalForeground: async () => pid,
+    terminate: async () => {
+      output.end()
+    },
+  }
+}
+
+/**
+ * A concrete `ctx.subprocess` provider that records every terminal spawn
+ * spec (with its exact argv and env references) and returns a fake terminal
+ * handle instead of allocating a real PTY — no long-lived terminal processes
+ * in tests. `spawn` is never used by the terminal path and fails loud.
+ */
+export class RecordingSubprocessRuntime extends SubprocessRuntime {
+  readonly terminalSpecs: SubprocessTerminalSpawnSpec[] = []
+
+  constructor(ctx: Context) {
+    super(ctx)
+  }
+
+  async resolveExecutable(command: string): Promise<string> {
+    return command
+  }
+
+  spawn(_spec: SubprocessSpawnSpec): SubprocessHandle {
+    throw new Error('unused: RecordingSubprocessRuntime.spawn')
+  }
+
+  async spawnTerminal(spec: SubprocessTerminalSpawnSpec): Promise<SubprocessTerminalHandle> {
+    this.terminalSpecs.push(spec)
+    return fakeTerminalHandle()
+  }
+}
+
+/** An inert `terminals` service shape for harnesses that never spawn terminals. */
+export function inertTerminals(): { spawn(): never } {
+  return { spawn: () => {
+    throw new Error('unused: inertTerminals.spawn')
+  } }
+}
+
+/** An inert `sandbox` service shape for harnesses that never confine. */
+export function inertSandbox(): { confine(): never } {
+  return { confine: () => {
+    throw new Error('unused: inertSandbox.confine')
+  } }
+}
+
+/** An inert `subprocess` service shape for harnesses that never spawn. */
+export function inertSubprocess(): { spawnTerminal(): never } {
+  return { spawnTerminal: () => {
+    throw new Error('unused: inertSubprocess.spawnTerminal')
+  } }
 }

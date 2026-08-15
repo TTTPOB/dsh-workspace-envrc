@@ -6,7 +6,14 @@ import { installWorkspaceEnvrcBashAdapter, type WorkspaceEnvrcBashAdapterHandle 
 import { defaultConfig, type WorkspaceEnvrcConfig } from '../src/core.js'
 import * as Integration from '../src/integration-plugin.js'
 import WorkspaceEnvrc from '../src/provider.js'
-import { mutableWorkspaceRegistry, okSpawn, RecordingShellExecutor } from './helpers.js'
+import {
+  inertSandbox,
+  inertSubprocess,
+  inertTerminals,
+  mutableWorkspaceRegistry,
+  okSpawn,
+  RecordingShellExecutor,
+} from './helpers.js'
 
 /** The fake `agents` service shape the adapter reads. */
 interface FakeAgents {
@@ -37,6 +44,11 @@ async function harness(config: WorkspaceEnvrcConfig = defaultConfig): Promise<Ha
   const registry = mutableWorkspaceRegistry()
   ctx.provide('agents', agents)
   ctx.provide('workspaceCordis', registry)
+  // The Block C integration row injects these; the Bash tests never invoke
+  // them, so inert services satisfy activation without spawning anything.
+  ctx.provide('terminals', inertTerminals())
+  ctx.provide('sandbox', inertSandbox())
+  ctx.provide('subprocess', inertSubprocess())
   const fibers: Fiber[] = []
   fibers.push(await ctx.plugin(RecordingShellExecutor))
   const RuntimeProvider = class extends WorkspaceEnvrc {

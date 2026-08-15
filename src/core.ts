@@ -97,9 +97,10 @@ export const MANAGED_ENV_SHIM_LABEL = 'workspace-envrc-managed-env-shim'
  * variable present in the direnv-produced environment, restores exactly the
  * managed snapshot passed through argv (never through ambient variables),
  * and execs the original program. `BASH_ENV` and `ENV` are stripped by the
- * invoking `env`, so an allowed environment cannot alter this restoration
- * step; the original program inherits the restored ordinary direnv
- * environment.
+ * invoking `env` and never restored, so an allowed environment cannot alter
+ * this restoration step and the original program does not see those control
+ * variables either; every other ordinary variable follows native direnv
+ * semantics.
  */
 export const MANAGED_ENV_SHIM_SCRIPT = `for name in \${!DSH_@}; do
   unset "$name"
@@ -214,6 +215,122 @@ export function buildManagedEnvShimArgv(options: ManagedEnvShimOptions): readonl
     label,
     String(pairs.length),
     ...flat,
+    ...originalArgv,
+  ]
+}
+
+/**
+ * Stable diagnostic label of the deferred capture shim invocation (Block C).
+ * It is the first argument after the capture script (`$0` in the outer shim)
+ * and must not contain a NUL byte.
+ */
+export const DEFERRED_ENV_SHIM_LABEL = 'workspace-envrc-deferred-env-shim'
+
+/**
+ * Deferred managed-env capture shim (Block C terminals).
+ *
+ * The persistent-terminal backend computes the final managed DSH_* snapshot
+ * only inside the `SubprocessTerminalSpawnSpec.env` it builds AFTER the
+ * `ctx.sandbox.confine(argv)` commit seam, so the snapshot cannot be known at
+ * wrap time. Instead of guessing from `process.env` in the Host (which would
+ * be stale and ambient), this outer shim runs as the wrapped argv's program:
+ * it enumerates `${!DSH_@}` from ITS OWN process environment — exactly the
+ * environment the subprocess provider merged from the final spec — records
+ * the exact name/value pairs in a Bash array, and `exec`s
+ * `direnv exec <canonical-workspace>` plus the post-direnv restoration shim
+ * with the captured pairs as its managed snapshot. Every dynamic input
+ * travels through argv (never `process.env`, no temp files, no `.envrc`
+ * parsing).
+ *
+ * Arguments after `-c` (Bash `-c` semantics): `$0` the diagnostic capture
+ * label, `$1` the absolute shim shell for the restoration shim, `$2` the
+ * direnv executable, `$3` the canonical workspace root, `$4` the diagnostic
+ * restoration label, `$5...` the original program argv. `BASH_ENV`/`ENV` were
+ * stripped by the invoking `env -u` and are never restored, so an allowed
+ * environment cannot alter either shim step and the original program does
+ * not see those control variables either.
+ */
+export const DEFERRED_ENV_CAPTURE_SCRIPT = `label=$0
+shim_shell=$1
+direnv_executable=$2
+workspace=$3
+restore_label=$4
+shift 4
+pairs=()
+for name in \${!DSH_@}; do
+  pairs+=("\$name" "\${!name}")
+done
+count=\$(( \${#pairs[@]} / 2 ))
+exec "\$direnv_executable" exec "\$workspace" env -u BASH_ENV -u ENV "\$shim_shell" --noprofile --norc -c '${MANAGED_ENV_SHIM_SCRIPT}' "\$restore_label" "\$count" "\${pairs[@]}" "\$@"`
+
+/** Options for {@link buildDeferredManagedExecArgv}. */
+export interface DeferredManagedExecOptions {
+  /** The direnv executable (bare PATH name or absolute path). */
+  executable: string
+  /** Canonical workspace root used as the lookup directory. */
+  canonicalWorkspace: string
+  /** Absolute bash-compatible shell running both shims. */
+  shimShell: string
+  /** Stable diagnostic label of the deferred capture shim invocation. */
+  captureLabel: string
+  /** Stable diagnostic label of the post-direnv restoration shim invocation. */
+  restoreLabel: string
+  /** The original program and arguments; must be non-empty. */
+  originalArgv: readonly string[]
+}
+
+/**
+ * Build the deferred managed-env argv for one terminal execution:
+ *
+ * ```text
+ * env -u BASH_ENV -u ENV <shimShell> --noprofile --norc -c CAPTURE_SCRIPT
+ *   captureLabel shimShell <executable> <canonical-workspace> restoreLabel <original argv>
+ * ```
+ *
+ * The capture shim runs BEFORE native direnv and therefore before the final
+ * `SubprocessTerminalSpawnSpec.env` exists (Block C): it captures the exact
+ * DSH_* snapshot from the spawned process environment, then execs
+ * `<executable> exec <canonical-workspace>` plus the post-direnv restoration
+ * shim carrying the captured pairs, so DSH ownership survives any direnv
+ * mutation while ordinary variables follow native direnv semantics. All
+ * dynamic inputs are validated (non-empty, NUL-free, absolute workspace and
+ * shim shell) and travel through argv.
+ */
+export function buildDeferredManagedExecArgv(options: DeferredManagedExecOptions): readonly string[] {
+  const { executable, canonicalWorkspace, shimShell, captureLabel, restoreLabel, originalArgv } = options
+  assertNonEmpty(executable, 'executable')
+  assertNoNul(executable, 'executable')
+  assertNonEmpty(canonicalWorkspace, 'canonicalWorkspace')
+  assertNoNul(canonicalWorkspace, 'canonicalWorkspace')
+  if (!isAbsolute(canonicalWorkspace)) {
+    throw new TypeError(`workspace-envrc: canonicalWorkspace must be an absolute path: ${canonicalWorkspace}`)
+  }
+  assertNonEmpty(shimShell, 'shimShell')
+  assertNoNul(shimShell, 'shimShell')
+  if (!isAbsolute(shimShell)) {
+    throw new TypeError(`workspace-envrc: shimShell must be an absolute path: ${shimShell}`)
+  }
+  assertNonEmpty(captureLabel, 'captureLabel')
+  assertNoNul(captureLabel, 'captureLabel')
+  assertNonEmpty(restoreLabel, 'restoreLabel')
+  assertNoNul(restoreLabel, 'restoreLabel')
+  assertOriginalArgv(originalArgv)
+  return [
+    'env',
+    '-u',
+    'BASH_ENV',
+    '-u',
+    'ENV',
+    shimShell,
+    '--noprofile',
+    '--norc',
+    '-c',
+    DEFERRED_ENV_CAPTURE_SCRIPT,
+    captureLabel,
+    shimShell,
+    executable,
+    canonicalWorkspace,
+    restoreLabel,
     ...originalArgv,
   ]
 }

@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
+  DEFERRED_ENV_CAPTURE_SCRIPT,
+  DEFERRED_ENV_SHIM_LABEL,
+  MANAGED_ENV_SHIM_LABEL,
   MANAGED_ENV_SHIM_SCRIPT,
+  buildDeferredManagedExecArgv,
   buildExecArgv,
   buildManagedEnvShimArgv,
   managedEnvPairs,
@@ -101,6 +105,68 @@ describe('buildManagedEnvShimArgv', () => {
     expect(() =>
       buildManagedEnvShimArgv({ shimShell: 'bash', label: 'l', snapshot: {}, originalArgv: ['true'] }),
     ).toThrow(/shimShell must be an absolute path/)
+  })
+})
+
+describe('buildDeferredManagedExecArgv', () => {
+  const base = {
+    executable: 'direnv',
+    canonicalWorkspace: '/workspaces/demo',
+    shimShell: '/bin/bash',
+    captureLabel: DEFERRED_ENV_SHIM_LABEL,
+    restoreLabel: MANAGED_ENV_SHIM_LABEL,
+    originalArgv: ['/bin/bash', '-i'],
+  } as const
+
+  it('builds the exact deferred capture argv: outer shim, then the original argv', () => {
+    const argv = buildDeferredManagedExecArgv({ ...base, originalArgv: ['/bin/bash', '--noprofile', '--norc', '-i'] })
+    expect(argv).toEqual([
+      'env',
+      '-u',
+      'BASH_ENV',
+      '-u',
+      'ENV',
+      '/bin/bash',
+      '--noprofile',
+      '--norc',
+      '-c',
+      DEFERRED_ENV_CAPTURE_SCRIPT,
+      DEFERRED_ENV_SHIM_LABEL,
+      '/bin/bash',
+      'direnv',
+      '/workspaces/demo',
+      MANAGED_ENV_SHIM_LABEL,
+      '/bin/bash',
+      '--noprofile',
+      '--norc',
+      '-i',
+    ])
+  })
+
+  it('embeds the post-direnv restoration shim inside the capture script', () => {
+    // The capture script must exec `direnv exec <workspace>` plus the exact
+    // managed-env restoration shim carrying the captured pairs, with the
+    // inner label/count/pairs position preserved.
+    expect(DEFERRED_ENV_CAPTURE_SCRIPT).toContain(`exec "$direnv_executable" exec "$workspace" env -u BASH_ENV -u ENV "$shim_shell" --noprofile --norc -c '${MANAGED_ENV_SHIM_SCRIPT}' "$restore_label" "$count" "\${pairs[@]}" "$@"`)
+    expect(DEFERRED_ENV_CAPTURE_SCRIPT).toContain('for name in ${!DSH_@}; do')
+    expect(DEFERRED_ENV_CAPTURE_SCRIPT).toContain('pairs+=("$name" "${!name}")')
+    // The restoration script itself contains no single quotes, so embedding
+    // it verbatim inside one single-quoted word is safe.
+    expect(MANAGED_ENV_SHIM_SCRIPT).not.toContain("'")
+  })
+
+  it('rejects empty original argv, NUL bytes, and non-absolute workspace/shim shell', () => {
+    expect(() => buildDeferredManagedExecArgv({ ...base, originalArgv: [] })).toThrow(/original argv/)
+    expect(() => buildDeferredManagedExecArgv({ ...base, originalArgv: ['a\0b'] })).toThrow(/NUL/)
+    expect(() => buildDeferredManagedExecArgv({ ...base, executable: '' })).toThrow(/executable must not be empty/)
+    expect(() => buildDeferredManagedExecArgv({ ...base, executable: 'd\0' })).toThrow(/NUL/)
+    expect(() => buildDeferredManagedExecArgv({ ...base, canonicalWorkspace: 'ws' })).toThrow(
+      /canonicalWorkspace must be an absolute path/,
+    )
+    expect(() => buildDeferredManagedExecArgv({ ...base, canonicalWorkspace: '/w\0s' })).toThrow(/NUL/)
+    expect(() => buildDeferredManagedExecArgv({ ...base, shimShell: 'bash' })).toThrow(/shimShell must be an absolute path/)
+    expect(() => buildDeferredManagedExecArgv({ ...base, captureLabel: 'a\0b' })).toThrow(/NUL/)
+    expect(() => buildDeferredManagedExecArgv({ ...base, restoreLabel: 'a\0b' })).toThrow(/NUL/)
   })
 })
 

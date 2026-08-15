@@ -6,9 +6,9 @@
  * activation preflight (native `direnv version` plus the shim shell check,
  * strictly awaited before this service is ready), Agent→workspace resolution
  * through scope ancestry, and the pure POSIX argv/command wrappers. Block B
- * wires the reversible Bash adapter over `ctx.shell.resolve` in a separate
- * module (`./bash-adapter.js`, installed by `./integration-plugin.js`); the
- * persistent-terminal adapter is a later block.
+ * wires the reversible Bash adapter over `ctx.shell.resolve` and Block C the
+ * persistent-terminal adapter over `ctx.terminals.spawn` (with the deferred
+ * managed-env capture wrapper), both installed by `./integration-plugin.js`.
  *
  * The plugin never calls `direnv allow`/`deny`/`permit`/`grant`/`edit`,
  * never parses or sources `.envrc`, never mutates `process.env`, and never
@@ -23,9 +23,11 @@ import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import z from '@deepseek-ai/schemastery'
 import type WorkspaceRegistry from 'dsh-workspace-overlay'
 import {
+  DEFERRED_ENV_SHIM_LABEL,
   MANAGED_ENV_SHIM_LABEL,
   assertPosixPlatform,
   assertWorkspaceEnvrcConfig,
+  buildDeferredManagedExecArgv,
   buildExecArgv,
   defaultConfig,
   resolveAgentWorkspace,
@@ -207,5 +209,25 @@ export default class WorkspaceEnvrc extends Service {
       },
       originalCommand,
     )
+  }
+
+  /**
+   * Wrap a terminal's original argv as the deferred managed-env chain (Block
+   * C). Unlike {@link wrapArgv}, no managed DSH_* snapshot is supplied: the
+   * backend builds the final `SubprocessTerminalSpawnSpec.env` only after the
+   * `ctx.sandbox.confine(argv)` commit seam, so the outer capture shim
+   * records the exact DSH_* facts from the spawned process environment right
+   * before direnv, and the post-direnv restoration shim reinstates exactly
+   * those pairs. `BASH_ENV`/`ENV` are stripped from the whole chain.
+   */
+  wrapDeferredArgv(canonicalWorkspace: string, originalArgv: readonly string[]): readonly string[] {
+    return buildDeferredManagedExecArgv({
+      executable: this.config.executable,
+      canonicalWorkspace,
+      shimShell: this.config.shimShell,
+      captureLabel: DEFERRED_ENV_SHIM_LABEL,
+      restoreLabel: MANAGED_ENV_SHIM_LABEL,
+      originalArgv,
+    })
   }
 }

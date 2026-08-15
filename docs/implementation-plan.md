@@ -89,7 +89,9 @@ Harness-managed `DSH_*` facts remain owned by DSH. After direnv evaluates `.envr
 2. restores only the exact managed `DSH_*` snapshot supplied for this execution;
 3. `exec`s the original argv.
 
-The shim receives values through argv, not ambient private variables, and invokes no parser for `.envrc`. `BASH_ENV` and `ENV` are removed for the shim itself so an allowed environment cannot alter the ownership-restoration step; the original program receives the ordinary direnv environment afterward.
+The shim receives values through argv, not ambient private variables, and invokes no parser for `.envrc`. `BASH_ENV` and `ENV` are explicit control-variable exceptions: `env -u BASH_ENV -u ENV` strips them for the shim and the whole exec chain, so an allowed environment cannot alter the ownership-restoration step and the original program does not see these two variables either. Every other ordinary environment entry — including credential-shaped variables explicitly exported by an allowed `.envrc` — follows native direnv semantics.
+
+For persistent terminals the final `SubprocessTerminalSpawnSpec.env` is built only after the backend's `ctx.sandbox.confine(argv)` commit seam, so the managed snapshot cannot be known at wrap time. The deferred capture shim therefore runs before direnv as the wrapped argv's program: it records the exact `DSH_*` name/value pairs present in the spawned process environment (the environment the subprocess provider merged from the final spec), then executes `direnv exec <canonical-workspace>` plus the restoration shim with the captured pairs. `DSH_SESSION_ID`/`DSH_PTY_SESSION_ID` thus survive any direnv mutation exactly; all dynamic inputs travel through argv.
 
 ## 4. Service and configuration
 
@@ -150,8 +152,8 @@ Foreground calls inherit the AgentLoop initiator context. The background-job sta
 Persistent terminal ownership is explicit in `ctx.terminals.spawn(owner, request, signal)`. Install an operation-local context around that public method. While the original call remains in flight:
 
 - resolve `owner` to one canonical workspace;
-- carry the exact owner/workspace only through that asynchronous terminal creation chain;
-- if the backend calls `ctx.sandbox.confine(argv, policy)`, wrap `argv` before delegating so direnv and `.envrc` evaluation run inside confinement;
+- carry the exact owner/workspace only through that asynchronous terminal creation chain (an operation-local `AsyncLocalStorage` context, so concurrent owners are isolated and unrelated spawns are unchanged);
+- if the backend calls `ctx.sandbox.confine(argv, policy)`, wrap `argv` before delegating so direnv and `.envrc` evaluation run inside confinement; the deferred capture shim (section 3.4) supplies the managed snapshot the backend cannot know at this seam;
 - if no sandbox call occurs (`danger-full-access` or an unconfined backend), wrap the final `ctx.subprocess.spawnTerminal(spec).argv` instead;
 - never wrap twice;
 - restore all three method descriptors on plugin disposal.
