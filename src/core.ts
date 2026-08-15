@@ -102,7 +102,7 @@ export const MANAGED_ENV_SHIM_LABEL = 'workspace-envrc-managed-env-shim'
  * variables either; every other ordinary variable follows native direnv
  * semantics.
  */
-export const MANAGED_ENV_SHIM_SCRIPT = `for name in \${!DSH_@}; do
+export const MANAGED_ENV_SHIM_SCRIPT = `for name in \${!DSH_*}; do
   unset "$name"
 done
 label=$0
@@ -234,7 +234,7 @@ export const DEFERRED_ENV_SHIM_LABEL = 'workspace-envrc-deferred-env-shim'
  * `ctx.sandbox.confine(argv)` commit seam, so the snapshot cannot be known at
  * wrap time. Instead of guessing from `process.env` in the Host (which would
  * be stale and ambient), this outer shim runs as the wrapped argv's program:
- * it enumerates `${!DSH_@}` from ITS OWN process environment — exactly the
+ * it enumerates `${!DSH_*}` from ITS OWN process environment — exactly the
  * environment the subprocess provider merged from the final spec — records
  * the exact name/value pairs in a Bash array, and `exec`s
  * `direnv exec <canonical-workspace>` plus the post-direnv restoration shim
@@ -257,7 +257,7 @@ workspace=$3
 restore_label=$4
 shift 4
 pairs=()
-for name in \${!DSH_@}; do
+for name in \${!DSH_*}; do
   pairs+=("\$name" "\${!name}")
 done
 count=\$(( \${#pairs[@]} / 2 ))
@@ -473,7 +473,7 @@ export interface PreflightExit {
 
 /** One bounded preflight child handle. */
 export interface PreflightChild {
-  /** Terminate the child; safe to call once or after close. */
+  /** Force-terminate the child; safe to call once or after close. */
   kill(): void
   /** Resolves exactly once with the exit facts; never rejects. */
   readonly done: Promise<PreflightExit>
@@ -584,5 +584,8 @@ function defaultPreflightSpawn(argv: readonly string[], signal: AbortSignal): Pr
     child.once('error', (error) => settle({ code: null, signal: null, spawnError: error }))
     child.once('close', (code, signal) => settle({ code, signal }))
   })
-  return { kill: () => child.kill('SIGTERM'), done }
+  // Preflight children own no durable work: use SIGKILL so a broken or
+  // hostile executable cannot ignore termination and defeat the activation
+  // deadline while runPreflight waits for `close` to reap it.
+  return { kill: () => child.kill('SIGKILL'), done }
 }

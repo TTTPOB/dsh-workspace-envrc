@@ -89,7 +89,7 @@ Harness-managed `DSH_*` facts remain owned by DSH. After direnv evaluates `.envr
 2. restores only the exact managed `DSH_*` snapshot supplied for this execution;
 3. `exec`s the original argv.
 
-The shim receives values through argv, not ambient private variables, and invokes no parser for `.envrc`. `BASH_ENV` and `ENV` are explicit control-variable exceptions: `env -u BASH_ENV -u ENV` strips them for the shim and the whole exec chain, so an allowed environment cannot alter the ownership-restoration step and the original program does not see these two variables either. Every other ordinary environment entry — including credential-shaped variables explicitly exported by an allowed `.envrc` — follows native direnv semantics.
+The shim receives values through argv, not ambient private variables, and invokes no parser for `.envrc`. `BASH_ENV` and `ENV` are explicit control-variable exceptions: `env -u BASH_ENV -u ENV` strips them from the post-direnv restoration segment and original program, so an allowed environment cannot alter the ownership-restoration step. The Bash tool's pre-existing outer executor shell and direnv evaluation may still observe ambient startup controls before that segment; the terminal deferred wrapper removes them from its outermost argv. Every other ordinary environment entry — including credential-shaped variables explicitly exported by an allowed `.envrc` — follows native direnv semantics.
 
 For persistent terminals the final `SubprocessTerminalSpawnSpec.env` is built only after the backend's `ctx.sandbox.confine(argv)` commit seam, so the managed snapshot cannot be known at wrap time. The deferred capture shim therefore runs before direnv as the wrapped argv's program: it records the exact `DSH_*` name/value pairs present in the spawned process environment (the environment the subprocess provider merged from the final spec), then executes `direnv exec <canonical-workspace>` plus the restoration shim with the captured pairs. `DSH_SESSION_ID`/`DSH_PTY_SESSION_ID` thus survive any direnv mutation exactly; all dynamic inputs travel through argv.
 
@@ -119,7 +119,7 @@ Defaults:
 }
 ```
 
-The provider supports POSIX platforms only in V1 and fails at activation on Windows. Activation preflight runs exactly two bounded children — `direnv version` and `env -u BASH_ENV -u ENV <shimShell> --noprofile --norc -c 'exit 0'` (the `env -u` pair keeps ambient `BASH_ENV`/`ENV` startup code out of the shim-shell check) — and never executes or reads any workspace file. A missing executable, bad version command, invalid absolute `shimShell`, or timeout fails loudly and leaves no decorators installed.
+The provider supports POSIX platforms only in V1 and fails at activation on Windows. Activation preflight runs exactly two bounded children: `direnv version`, then one real managed-environment clear/restore shim probe under `env -u BASH_ENV -u ENV <shimShell> --noprofile --norc -c <shim> ...`. The probe rejects shells that cannot execute the Bash 3.2+-compatible `${!DSH_*}` prefix expansion, keeps ambient startup code out of the check, and never executes or reads a workspace file. A missing executable, bad version command, invalid absolute `shimShell`, or timeout fails loudly and leaves no decorators installed.
 
 The service owns pure projections:
 

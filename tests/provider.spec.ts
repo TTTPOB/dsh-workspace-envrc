@@ -94,7 +94,16 @@ describe('WorkspaceEnvrc activation', () => {
     await vi.waitFor(() => expect(spawn).toHaveBeenCalledTimes(2))
     expect(spawn).toHaveBeenNthCalledWith(
       2,
-      ['env', '-u', 'BASH_ENV', '-u', 'ENV', '/bin/bash', '--noprofile', '--norc', '-c', 'exit 0'],
+      [
+        'env', '-u', 'BASH_ENV', '-u', 'ENV',
+        'DSH_ENVRC_STALE=must-be-cleared',
+        '/bin/bash', '--noprofile', '--norc', '-c',
+        MANAGED_ENV_SHIM_SCRIPT,
+        MANAGED_ENV_SHIM_LABEL,
+        '1', 'DSH_ENVRC_PREFLIGHT', 'restored',
+        '/bin/bash', '--noprofile', '--norc', '-c',
+        'test -z "${DSH_ENVRC_STALE-}" && test "${DSH_ENVRC_PREFLIGHT-}" = restored',
+      ],
       expect.any(AbortSignal),
     )
     resolve(1, { code: 0, signal: null })

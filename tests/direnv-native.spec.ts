@@ -26,7 +26,6 @@
  */
 import { spawn } from 'node:child_process'
 import { execFileSync } from 'node:child_process'
-import { existsSync } from 'node:fs'
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -99,28 +98,17 @@ function runChild(
 }
 
 /**
- * Detect the native direnv binary: `direnv version` must succeed, and the
- * resolved absolute path is returned. `undefined` skips the whole suite
- * (describe.skipIf) on machines without direnv; on this development machine
- * the suite MUST run.
+ * Require the native direnv binary: it is a runtime prerequisite, so the real
+ * integration suite fails loudly rather than silently skipping without it.
  */
-function detectDirenv(): string | undefined {
-  try {
-    execFileSync('direnv', ['version'], { stdio: 'ignore' })
-  } catch {
-    return undefined
-  }
-  try {
-    const resolved = execFileSync('bash', ['-c', 'command -v direnv'], { encoding: 'utf8' }).trim()
-    if (resolved.length > 0) return resolved
-  } catch {
-    // fall through to the fixed system path
-  }
-  return existsSync('/usr/bin/direnv') ? '/usr/bin/direnv' : undefined
+function requireDirenv(): string {
+  execFileSync('direnv', ['version'], { stdio: 'ignore' })
+  const resolved = execFileSync('bash', ['-c', 'command -v direnv'], { encoding: 'utf8' }).trim()
+  if (resolved.length === 0) throw new Error('direnv is required for native integration tests')
+  return resolved
 }
 
-const direnvPath = detectDirenv()
-const nativeDescribe = describe.skipIf(direnvPath === undefined)
+const direnvPath = requireDirenv()
 
 /**
  * One isolated native-direnv test harness: a repo-internal temp root holding
@@ -183,7 +171,7 @@ async function makeHarness(): Promise<NativeHarness> {
   for (const sub of ['data', 'config', 'cache', 'home']) {
     await mkdir(join(root, sub))
   }
-  const direnv = direnvPath!
+  const direnv = direnvPath
   const config: WorkspaceEnvrcConfig = { ...defaultConfig, executable: direnv }
   const ctx = new Context()
   // The provider row injects these; the projections under test never read
@@ -270,7 +258,7 @@ async function allowFiles(h: NativeHarness): Promise<string[]> {
   return readdir(allowDir(h))
 }
 
-nativeDescribe('real direnv native state machine (isolated repo-internal XDG)', () => {
+describe('real direnv native state machine (isolated repo-internal XDG)', () => {
   it('unallowed .envrc blocks; direnv allow runs it; content change re-blocks; re-allow serves the new value; deny blocks', async () => {
     const h = await makeHarness()
     try {

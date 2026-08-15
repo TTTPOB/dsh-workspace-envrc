@@ -148,7 +148,7 @@ describe('buildDeferredManagedExecArgv', () => {
     // managed-env restoration shim carrying the captured pairs, with the
     // inner label/count/pairs position preserved.
     expect(DEFERRED_ENV_CAPTURE_SCRIPT).toContain(`exec "$direnv_executable" exec "$workspace" env -u BASH_ENV -u ENV "$shim_shell" --noprofile --norc -c '${MANAGED_ENV_SHIM_SCRIPT}' "$restore_label" "$count" "\${pairs[@]}" "$@"`)
-    expect(DEFERRED_ENV_CAPTURE_SCRIPT).toContain('for name in ${!DSH_@}; do')
+    expect(DEFERRED_ENV_CAPTURE_SCRIPT).toContain('for name in ${!DSH_*}; do')
     expect(DEFERRED_ENV_CAPTURE_SCRIPT).toContain('pairs+=("$name" "${!name}")')
     // The restoration script itself contains no single quotes, so embedding
     // it verbatim inside one single-quoted word is safe.

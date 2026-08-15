@@ -52,7 +52,7 @@ dsh --profile web --dump-config
 - 每个 spawn 链用一个 operation-local `AsyncLocalStorage` 上下文 `{owner, canonical, wrapped}` 跨整个未发布创建链（含 returned Promise），并发 owner 互不串扰。
 - **deferred wrapper 在 confine 之前**：`ctx.sandbox.confine(argv, policy)`（terminal-bash 的 argv commit seam）收到的是 deferred envrc wrapper——sandbox 包住整个 direnv 链，`.envrc` 求值留在 confinement 内；wrapper/confine 抛错原样传播。
 - **danger final fallback**：`danger-full-access` 或不调用 confine 的 backend 走 `ctx.subprocess.spawnTerminal`，只替换 `spec.argv` 为 deferred wrapper；已 wrapped 绝不 double wrap；spawn 链之外的直接调用一律原样。
-- **DSH 最终环境捕获**：backend 在 confine 之后才构造最终 `SubprocessTerminalSpawnSpec.env`（`DSH_SESSION_ID`/`DSH_PTY_SESSION_ID` 此时尚不可见），因此外层 capture shim 在 direnv 之前从**自身进程环境**枚举 `${!DSH_@}`（即 subprocess provider 合并后的最终环境），再 `exec <direnv> exec <canonical>` + post-direnv 恢复 shim（删除 direnv 后所有 `DSH_*`、恢复 captured exact snapshot、exec 原 argv）。
+- **DSH 最终环境捕获**：backend 在 confine 之后才构造最终 `SubprocessTerminalSpawnSpec.env`（`DSH_SESSION_ID`/`DSH_PTY_SESSION_ID` 此时尚不可见），因此外层 capture shim 在 direnv 之前从**自身进程环境**枚举 Bash 3.2+ 兼容的 `${!DSH_*}`（即 subprocess provider 合并后的最终环境），再 `exec <direnv> exec <canonical>` + post-direnv 恢复 shim（删除 direnv 后所有 `DSH_*`、恢复 captured exact snapshot、exec 原 argv）。
 - **新 terminal 快照**：环境在 spawn 时冻结；**已运行 terminal 不变**——adapter dispose 不杀进程、不重启，in-flight 创建不被 kill；只有新 terminal 重新 direnv。
 - 交互式 `cd` hook **不仿真**：终端内目录变化由用户 shell 自己的 direnv hook 处理。
 
@@ -60,8 +60,9 @@ dsh --profile web --dump-config
 
 - 普通环境变量（包括被允许的 `.envrc` 显式导出的 credential-shaped 变量）遵循原生 direnv 语义：一旦用户 allow，这些变量进入该进程环境，**模型可读取**（这是用户原生 `direnv allow` 的刻意后果）。
 - `DSH_*` 归属：direnv 求值后 shim 删除环境里全部 `DSH_*`，只恢复本次请求的精确 managed 快照（terminal 路径由 deferred capture 在 direnv 之前从 spawn 进程环境捕获精确快照）。managed name 严格 `DSH_[A-Z0-9_]+` 且 value 为 string；value 全部走 argv，不拼进脚本。
-- **`BASH_ENV`/`ENV` 是明确例外**：`env -u BASH_ENV -u ENV` 把这两个控制变量从整个 chain 移除，shim 与原始程序都不可见——direnv（或环境）即使设置它们也不会生效。普通 direnv shell（用户交互 shell 的 direnv hook）不会移除这两个变量，因此这是本 chain 与普通 direnv shell 的文档化差异。
-- **preflight 只 version/shell，无 `.envrc`**：激活只运行 `direnv version` 与 `env -u BASH_ENV -u ENV <shimShell> --noprofile --norc -c 'exit 0'`，不用 `shell: true`，不执行、不读取任何 workspace `.envrc`，不改 `process.env`；失败消息只含 stage 与 executable/path，不含子进程 stdout/stderr/env/secret。
+- **`BASH_ENV`/`ENV` 是明确例外**：post-direnv shim 与原始程序都在 `env -u BASH_ENV -u ENV` 后运行，因此看不到 direnv 设置的这两个控制变量。Bash工具的既有外层executor shell以及direnv自身的求值shell仍可能读取启动前ambient的`BASH_ENV`；插件不把这个Host输入继续传给post-direnv段。Terminal路径的deferred argv则从最外层开始移除它们。普通direnv shell不会做这种移除，因此这是文档化差异。
+- **preflight只验证version与shim语义，不读`.envrc`**：激活先运行`direnv version`，再在配置的shell下实际运行一次`DSH_*`清除/恢复probe；两个child都bounded，不用`shell: true`，不执行、不读取任何workspace `.envrc`，不改`process.env`。probe同时验证Bash 3.2+兼容的`${!DSH_*}`行为；失败消息只含stage与executable/path，不含子进程stdout/stderr/env/secret。
+- **sandbox必须能读取原生allow数据库**：direnv在confine内部校验授权。若部署把`XDG_DATA_HOME`放在sandbox会遮蔽的位置（例如local bwrap用tmpfs覆盖的`/tmp`），sandbox内会把外部已allow的`.envrc`视为blocked；请把direnv授权状态放在sandbox可读的持久目录。
 - 诊断与错误不打印 stdout/stderr/env/secret；公开 API 不接受、不返回环境快照之外的敏感内容。
 
 ## 失败与生命周期边界
@@ -71,6 +72,7 @@ dsh --profile web --dump-config
 - **HMR/dispose**：还原确切的先前 method descriptor（幂等；后装 wrapper 不会被先装者的 dispose 移除，完全还原按逆安装序 dispose）；已启动进程保留其环境与进程属主，不因 decorator 卸载被杀。
 - **overlay 先于本插件卸载**：后续 Agent 查找无映射 → 原样透传，或按普通 workspace 生命周期失败；没有缓存的 workspace 路径比映射活得更久。
 - **并发**：不同 workspace 的 Agent / 终端创建各自独立 direnv 求值，互不串扰。
+- **组合要求**：唯一integration row同时注入`agents`、`shell`、`sandbox`、`subprocess`、`terminals`与`workspaceEnvrc`，保证terminal的direnv链不会落到late sandbox外；缺少任何一个service时整行保持pending，Bash adapter也不会单独安装，即使`enableTerminal: false`。
 - **不覆盖**：Workspace MCP、global MCP、LSP、subagent providers 与 generic `ctx.subprocess.spawn()` 明确不在范围（完整非目标清单见 [docs/implementation-plan.md](docs/implementation-plan.md) §8）。**Windows 不支持**（激活即失败）。
 - **no watcher / no auto restart**：本 bundle 不 watch 任何文件（包括 `.envrc`——内容变更由原生 direnv 在下次执行时按 hash 拒绝）；`.envrc` 变化后不自动重启后台 job 或已运行 terminal。
 
@@ -111,7 +113,7 @@ pnpm build          # tsc -> dist
 ## 安全与信任边界
 
 - 授权始终由用户在 DSH 外、本机 direnv 侧完成（`direnv allow` 只属于用户）；`.envrc` 内容变更后原生 hash 失效会阻塞后续执行，直到用户重新 allow。DSH 侧没有任何 allow/deny/编辑入口，也不给模型提供 allow/deny 工具。
-- 每个启用执行的包装形状为 `direnv exec <canonical-root> <managed-env-shim> <original>`：求值与命令在同一进程树内（sandbox 开启时整体位于 executor/terminal 的 confine 之内）；`DSH_*` 归属在求值后恢复（terminal 路径由 spawn 前的 deferred capture 提供精确快照）；`BASH_ENV`/`ENV` 是控制变量例外（整条 chain 移除，原始程序也不可见）；其余普通环境变量（含 `.envrc` 显式导出的 credential-shaped 变量）遵循原生 direnv 语义。
+- 每个启用执行的包装形状为 `direnv exec <canonical-root> <managed-env-shim> <original>`：求值与命令在同一进程树内（sandbox 开启时整体位于 executor/terminal 的 confine 之内）；`DSH_*` 归属在求值后恢复（terminal 路径由 spawn 前的 deferred capture 提供精确快照）；`BASH_ENV`/`ENV`是控制变量例外（post-direnv段与原始程序不可见；Bash外层executor的ambient启动行为见上文）；其余普通环境变量（含 `.envrc` 显式导出的 credential-shaped 变量）遵循原生 direnv 语义。
 - 诊断与错误只含 stage、可执行文件路径与退出事实，不打印 stdout/stderr/env/secret；公开 API 不接受、不返回环境快照之外的敏感内容。
 
 ## 许可证

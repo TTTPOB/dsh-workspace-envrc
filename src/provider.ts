@@ -22,6 +22,7 @@ import type WorkspaceRegistry from 'dsh-workspace-overlay'
 import {
   DEFERRED_ENV_SHIM_LABEL,
   MANAGED_ENV_SHIM_LABEL,
+  MANAGED_ENV_SHIM_SCRIPT,
   assertPosixPlatform,
   assertWorkspaceEnvrcConfig,
   buildDeferredManagedExecArgv,
@@ -95,9 +96,9 @@ export default class WorkspaceEnvrc extends Service {
 
   /**
    * Strict activation gate: V1 is POSIX-only, and both native checks —
-   * `direnv version` and `<shimShell> --noprofile --norc -c 'exit 0'` —
-   * must complete within `versionCheckTimeoutMs` before this service is
-   * ready. The checks execute no shell (`shell: true` is never used), read
+   * `direnv version` and one real clear/restore shim probe under the configured
+   * shell — must complete within `versionCheckTimeoutMs` before this service
+   * is ready. The checks never use `shell: true`, read
    * or run no workspace `.envrc`, and never touch `process.env`. A missing
    * executable, a bad version command, an invalid absolute shim shell, or a
    * timeout fails loudly and leaves no adapters installed.
@@ -116,11 +117,21 @@ export default class WorkspaceEnvrc extends Service {
         spawn: this.runtime.spawn,
       })
       await runPreflight({
-        // Bash reads BASH_ENV even for non-interactive `-c` invocations;
-        // activation validates the binary without executing ambient startup
-        // code from the Harness process environment.
-        argv: ['env', '-u', 'BASH_ENV', '-u', 'ENV', this.config.shimShell, '--noprofile', '--norc', '-c', 'exit 0'],
-        stage: 'shim shell',
+        // Execute the real restoration shim, not merely `exit 0`: this rejects
+        // a configured shell whose prefix expansion cannot clear arbitrary
+        // DSH_* names (notably the Bash 3.2 compatibility boundary). Ambient
+        // startup hooks stay disabled for both shim and probe shells.
+        argv: [
+          'env', '-u', 'BASH_ENV', '-u', 'ENV',
+          'DSH_ENVRC_STALE=must-be-cleared',
+          this.config.shimShell, '--noprofile', '--norc', '-c',
+          MANAGED_ENV_SHIM_SCRIPT,
+          MANAGED_ENV_SHIM_LABEL,
+          '1', 'DSH_ENVRC_PREFLIGHT', 'restored',
+          this.config.shimShell, '--noprofile', '--norc', '-c',
+          'test -z "${DSH_ENVRC_STALE-}" && test "${DSH_ENVRC_PREFLIGHT-}" = restored',
+        ],
+        stage: 'shim semantics',
         identity: this.config.shimShell,
         timeoutMs: this.config.versionCheckTimeoutMs,
         signal: controller.signal,
