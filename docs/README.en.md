@@ -8,7 +8,7 @@ Target DSH: `0.1.0-rc.6`. Runtime peers include `@deepseek-ai/cordis` 4.0.1, `@d
 
 ## Current state
 
-Everything is implemented and covered by tests: the `workspaceEnvrc` provider core, the reversible Bash adapter, the persistent-terminal adapter, the integration row, and two real-composition test paths (a real `direnv` allow/deny/content-change state machine, and a real Cordis Loader composing the built `dist` provider/integration rows). The implementation plan [`implementation-plan.md`](./implementation-plan.md) is marked **implemented**, and its completion criteria are met (except the final GitHub publication; see §10 of the plan). This README describes the current implementation facts and no longer narrates the work in historical blocks.
+Everything is implemented and covered by tests: the `workspaceEnvrc` provider core, the reversible Bash adapter, the persistent-terminal adapter, the integration row, and two real-composition test paths (a real `direnv` allow/deny/content-change state machine, and a real Cordis Loader composing the built `dist` provider/integration rows). The implementation plan [`implementation-plan.md`](./implementation-plan.md) is marked **implemented and published**, and all completion criteria are met. This README describes the current implementation facts and no longer narrates the work in historical blocks.
 
 ## Dependencies and installation
 

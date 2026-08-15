@@ -8,7 +8,7 @@ DSH 树外独立 bundle：把本机原生 direnv 环境应用到显式归属于 
 
 ## 当前状态
 
-全部能力已实现并有测试覆盖：`workspaceEnvrc` provider core、可逆 Bash adapter、持久终端 adapter、集成行，以及两条真实组合测试路径（真实 `direnv` 的 allow/deny/内容变更状态机、真实 Cordis Loader 组合内置 dist 的 provider/integration 行）。实现计划 [docs/implementation-plan.md](docs/implementation-plan.md) 状态为 **implemented**，完成标准已达成（除最终 GitHub 发布，见该文件 §10）。本 README 描述当前实现事实，不再按历史 Block 分期叙述。
+全部能力已实现并有测试覆盖：`workspaceEnvrc` provider core、可逆 Bash adapter、持久终端 adapter、集成行，以及两条真实组合测试路径（真实 `direnv` 的 allow/deny/内容变更状态机、真实 Cordis Loader 组合内置 dist 的 provider/integration 行）。实现计划 [docs/implementation-plan.md](docs/implementation-plan.md) 状态为 **implemented and published**，全部完成标准已达成。本 README 描述当前实现事实，不再按历史 Block 分期叙述。
 
 ## 依赖与安装
 

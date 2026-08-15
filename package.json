@@ -2,6 +2,21 @@
   "name": "dsh-workspace-envrc",
   "version": "0.1.0",
   "description": "Out-of-tree DSH bundle: applies the local machine's native direnv environment to explicitly Agent/workspace-owned Bash executions and persistent terminals. Depends on dsh-workspace-overlay; requires a host-installed direnv; never calls allow/deny or reads .envrc itself.",
+  "keywords": [
+    "deepseek-harness",
+    "dsh-plugin",
+    "direnv",
+    "workspace",
+    "cordis"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/TTTPOB/dsh-workspace-envrc.git"
+  },
+  "homepage": "https://github.com/TTTPOB/dsh-workspace-envrc#readme",
+  "bugs": {
+    "url": "https://github.com/TTTPOB/dsh-workspace-envrc/issues"
+  },
   "type": "module",
   "main": "./dist/provider.js",
   "exports": {

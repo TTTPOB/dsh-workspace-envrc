@@ -1,6 +1,6 @@
 # DSH workspace direnv integration plan
 
-Status: **implemented**. Every block in §9 is complete, the completion criteria in §10 are met (the final GitHub publication remains a pending release step — this repository's audit does not commit), and the READMEs (`README.md` / `README.en.md`) describe the current implementation facts. This document keeps its original plan structure as the historical record; the requirements below describe the implemented contract, and the code at baseline `8140a26` matches them. No known discrepancy with the code remains; the only audit edits were status markers, the exact preflight argv (§4), and §9/§10 completion markers.
+Status: **implemented and published**. Every block in §9 and every completion criterion in §10 is complete. The READMEs describe the current behavior; this document retains the implementation decomposition and verified contract.
 
 ## 1. Objective
 
@@ -220,7 +220,7 @@ Suggested commit: `docs: document workspace direnv integration` (the final commi
 
 ## 10. Completion criteria
 
-**All criteria below are met** at baseline `8140a26` (tests, typecheck, build, and pack verified during the release audit; the native state machine runs against the real direnv in isolated repo-internal XDG state):
+**All criteria below are met** (tests, typecheck, build, pack, installed rc.6 activation, isolated bundle composition, and the native state machine against real direnv were verified during the release audit):
 
 - ✅ A live workspace Agent's foreground Bash, background Bash, and new persistent terminals execute through the local `direnv exec` under the same sandbox/process owner.
 - ✅ Native allow/deny/content-hash behavior is proven with isolated direnv state (`tests/direnv-native.spec.ts`).
@@ -230,4 +230,4 @@ Suggested commit: `docs: document workspace direnv integration` (the final commi
 - ✅ All decorators reverse on unload (idempotent, successor-safe; verified through the real Loader in `tests/loader-composition.spec.ts`).
 - ✅ No real user direnv/profile/Harness state is modified by any test or by the plugin.
 - ✅ Focused/full tests, typecheck, build, pack, installed rc.6 Loader activation, and isolated bundle composition verification pass.
-- ⏳ The independent repository is published to GitHub — the one remaining release step; this audit intentionally does not commit or publish.
+- ✅ The independent repository is published at `https://github.com/TTTPOB/dsh-workspace-envrc`.
