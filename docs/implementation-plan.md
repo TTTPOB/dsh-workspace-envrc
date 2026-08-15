@@ -290,7 +290,8 @@ Commit history:
 a40aa71 docs: plan workspace mcp direnv
 019d63f feat: apply direnv to workspace mcp
 3ead00d test: cover workspace mcp direnv reload
-docs: document workspace mcp direnv   (this documentation commit)
+d9c2289 docs: document workspace mcp direnv
+fbbcecb fix: harden execution wrapper compatibility
 ```
 
 Completion is verified: the full 156-test suite (including focused real MCP/direnv/reload coverage and final wrapper-compatibility regressions) passes (`pnpm test`), strict typecheck (`pnpm typecheck`), build, and pack all pass, the live suite's marker reconciliation reports no process residue, the real Loader activates the built `dist` rows against the installed rc.6 packages, and GitHub publication is live.
