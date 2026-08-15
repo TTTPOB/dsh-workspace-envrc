@@ -1,6 +1,6 @@
 # DSH workspace direnv integration plan
 
-Status: accepted implementation plan.
+Status: **implemented**. Every block in §9 is complete, the completion criteria in §10 are met (the final GitHub publication remains a pending release step — this repository's audit does not commit), and the READMEs (`README.md` / `README.en.md`) describe the current implementation facts. This document keeps its original plan structure as the historical record; the requirements below describe the implemented contract, and the code at baseline `8140a26` matches them. No known discrepancy with the code remains; the only audit edits were status markers, the exact preflight argv (§4), and §9/§10 completion markers.
 
 ## 1. Objective
 
@@ -119,7 +119,7 @@ Defaults:
 }
 ```
 
-The provider supports POSIX platforms only in V1 and fails at activation on Windows. It checks `direnv version` and the shim shell at activation without evaluating workspace files. A missing executable, bad version command, invalid absolute `shimShell`, or timeout fails loudly and leaves no decorators installed.
+The provider supports POSIX platforms only in V1 and fails at activation on Windows. Activation preflight runs exactly two bounded children — `direnv version` and `env -u BASH_ENV -u ENV <shimShell> --noprofile --norc -c 'exit 0'` (the `env -u` pair keeps ambient `BASH_ENV`/`ENV` startup code out of the shim-shell check) — and never executes or reads any workspace file. A missing executable, bad version command, invalid absolute `shimShell`, or timeout fails loudly and leaves no decorators installed.
 
 The service owns pure projections:
 
@@ -185,9 +185,9 @@ Agentless or unrelated subprocess terminal spawns outside the explicit `terminal
 
 ## 9. Implementation blocks and commits
 
-Every implementation block is delegated to `opencode-go/deepseek-v4-flash` with `max` reasoning in the foreground. Subagents edit and test but never commit. The main agent reviews, runs focused gates, and creates atomic commits.
+Every implementation block was delegated to `opencode-go/deepseek-v4-flash` with `max` reasoning in the foreground. Subagents edited and tested but never committed. The main agent reviewed, ran focused gates, and created atomic commits. **All four blocks are implemented**; the commits below are the actual history (Block D landed as `test: cover native direnv integration`).
 
-### Block A — package skeleton and provider core
+### Block A — package skeleton and provider core *(implemented)*
 
 - Create pnpm/ESM/strict TypeScript package metadata, exports, patch, license, and test harness.
 - Implement Config validation, version preflight, Agent-to-workspace ancestry resolution, POSIX argv wrapper, command quoting, and managed `DSH_*` restoration shim.
@@ -195,29 +195,39 @@ Every implementation block is delegated to `opencode-go/deepseek-v4-flash` with 
 
 Suggested commit: `feat: add workspace direnv provider`
 
-### Block B — Bash adapter
+### Block B — Bash adapter *(implemented)*
 
 - Reversibly decorate Shell resolve.
 - Test foreground, real background Jobs ownership, two-workspace isolation, agentless/direct calls, workdir preservation, sandbox placement, blocked/allowed/changed/denied behavior, cancellation, and HMR restoration.
 
 Suggested commit: `feat: apply direnv to workspace bash`
 
-### Block C — persistent terminal adapter
+### Block C — persistent terminal adapter *(implemented)*
 
 - Add operation-local owner context and reversible terminal/sandbox/subprocess decorators.
 - Test confined and danger-full-access ordering, no double wrap, explicit owner isolation, direct subprocess bypass, concurrent terminal creation, initial environment, blocked state, and HMR restoration.
 
 Suggested commit: `feat: apply direnv to workspace terminals`
 
-### Block D — real composition, docs, and release audit
+### Block D — real composition, docs, and release audit *(implemented)*
 
 - Add real Loader composition tests against installed DSH rc.6 and the built workspace overlay dependency.
 - Use isolated XDG direnv state to prove native allow, content-change invalidation, re-allow, and deny.
 - Verify no write to the real direnv state, no user profile changes, no process residue, complete patch rows, package exports, pack contents, and isolated `DSH_HOME` installation.
 - Write Chinese and English READMEs with security/trust and execution-boundary details.
 
-Suggested commit: `docs: document workspace direnv integration`
+Suggested commit: `docs: document workspace direnv integration` (the final commit history is `05fb756 docs: plan workspace direnv integration` → `bdc0739 feat: add workspace direnv provider` → `5feeca3 feat: apply direnv to workspace bash` → `7d17997 feat: apply direnv to workspace terminals` → `8140a26 test: cover native direnv integration`.)
 
 ## 10. Completion criteria
 
-The plugin is complete when a live workspace Agent's foreground Bash, background Bash, and new persistent terminals execute through the local `direnv exec` under the same sandbox/process owner; native allow/deny/content-hash behavior is proven with isolated direnv state; ordinary environment mutations are preserved while `DSH_*` ownership is restored; unrelated and agentless subprocess calls remain unchanged; two workspaces remain isolated; all decorators reverse on unload; no real user direnv/profile/Harness state is modified; focused/full tests, typecheck, build, pack, installed rc.6 Loader activation, and isolated bundle composition verification pass; and the independent repository is published to GitHub.
+**All criteria below are met** at baseline `8140a26` (tests, typecheck, build, and pack verified during the release audit; the native state machine runs against the real direnv in isolated repo-internal XDG state):
+
+- ✅ A live workspace Agent's foreground Bash, background Bash, and new persistent terminals execute through the local `direnv exec` under the same sandbox/process owner.
+- ✅ Native allow/deny/content-hash behavior is proven with isolated direnv state (`tests/direnv-native.spec.ts`).
+- ✅ Ordinary environment mutations are preserved while `DSH_*` ownership is restored (`BASH_ENV`/`ENV` are the documented control-variable exceptions).
+- ✅ Unrelated and agentless subprocess calls remain unchanged.
+- ✅ Two workspaces remain isolated (concurrent Bash executions and terminal creations).
+- ✅ All decorators reverse on unload (idempotent, successor-safe; verified through the real Loader in `tests/loader-composition.spec.ts`).
+- ✅ No real user direnv/profile/Harness state is modified by any test or by the plugin.
+- ✅ Focused/full tests, typecheck, build, pack, installed rc.6 Loader activation, and isolated bundle composition verification pass.
+- ⏳ The independent repository is published to GitHub — the one remaining release step; this audit intentionally does not commit or publish.

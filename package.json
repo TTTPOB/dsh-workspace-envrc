@@ -1,7 +1,7 @@
 {
   "name": "dsh-workspace-envrc",
   "version": "0.1.0",
-  "description": "Out-of-tree DSH bundle: applies the local machine's native direnv environment to explicitly Agent/workspace-owned Bash executions and persistent terminals. Block A ships the provider core (Config, activation preflight, Agent->workspace resolution, direnv exec argv/command wrappers, managed DSH_* restoration shim); Block B wires the reversible Bash adapter over ctx.shell.resolve (foreground and background jobs); Block C wires the reversible persistent-terminal adapter over ctx.terminals.spawn with the deferred managed-env capture wrapper inside the sandbox confine seam.",
+  "description": "Out-of-tree DSH bundle: applies the local machine's native direnv environment to explicitly Agent/workspace-owned Bash executions and persistent terminals. Depends on dsh-workspace-overlay; requires a host-installed direnv; never calls allow/deny or reads .envrc itself.",
   "type": "module",
   "main": "./dist/provider.js",
   "exports": {

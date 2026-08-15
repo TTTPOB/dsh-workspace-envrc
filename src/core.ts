@@ -6,8 +6,8 @@
  * inputs, never touches `process.env`, never runs through a shell
  * (`shell: true`), and never executes, reads, parses, or hashes any
  * workspace `.envrc` — native direnv owns that world. The provider binds the
- * validated Config values and the later blocks' adapters consume the
- * projections from the service.
+ * validated Config values and the execution adapters consume the projections
+ * from the service.
  *
  * @module dsh-workspace-envrc/core
  */
@@ -33,9 +33,9 @@ export interface WorkspaceEnvrcConfig {
    * shim (the plan defaults `/bin/bash`); never containing a NUL byte.
    */
   shimShell: string
-  /** Whether the Bash adapter applies to workspace Bash executions (Block B). */
+  /** Whether the Bash adapter applies to workspace Bash executions. */
   enableBash: boolean
-  /** Whether the persistent-terminal adapter applies (Block C). */
+  /** Whether the persistent-terminal adapter applies. */
   enableTerminal: boolean
   /**
    * Activation preflight deadline in milliseconds: a positive integer no
@@ -220,14 +220,14 @@ export function buildManagedEnvShimArgv(options: ManagedEnvShimOptions): readonl
 }
 
 /**
- * Stable diagnostic label of the deferred capture shim invocation (Block C).
+ * Stable diagnostic label of the deferred capture shim invocation.
  * It is the first argument after the capture script (`$0` in the outer shim)
  * and must not contain a NUL byte.
  */
 export const DEFERRED_ENV_SHIM_LABEL = 'workspace-envrc-deferred-env-shim'
 
 /**
- * Deferred managed-env capture shim (Block C terminals).
+ * Deferred managed-env capture shim for persistent terminals.
  *
  * The persistent-terminal backend computes the final managed DSH_* snapshot
  * only inside the `SubprocessTerminalSpawnSpec.env` it builds AFTER the
@@ -288,7 +288,7 @@ export interface DeferredManagedExecOptions {
  * ```
  *
  * The capture shim runs BEFORE native direnv and therefore before the final
- * `SubprocessTerminalSpawnSpec.env` exists (Block C): it captures the exact
+ * `SubprocessTerminalSpawnSpec.env` exists: it captures the exact
  * DSH_* snapshot from the spawned process environment, then execs
  * `<executable> exec <canonical-workspace>` plus the post-direnv restoration
  * shim carrying the captured pairs, so DSH ownership survives any direnv

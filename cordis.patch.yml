@@ -1,20 +1,26 @@
 # dsh-workspace-envrc bundle patch: register the workspaceEnvrc provider and
 # the integration row that wires its execution adapters.
 #
-# Block A ships the provider core. Block B adds the reversible Bash adapter;
-# Block C adds the persistent-terminal adapter (operation-local AsyncLocalStorage
-# over ctx.terminals.spawn, wrapping the ctx.sandbox.confine argv commit seam or
-# the ctx.subprocess.spawnTerminal spec argv with the deferred managed-env
-# wrapper). Both are installed by the single workspace-envrc-integration row
-# below (the row injects agents/shell/sandbox/subprocess/terminals/workspaceEnvrc,
-# installs Bash first then Terminal inside one effect, and reverse-disposes
-# terminal-first then Bash on fiber unload; a failing Terminal install rolls
-# back the already-installed Bash adapter).
+# This bundle DEPENDS on the dsh-workspace-overlay bundle (workspaceCordis
+# service + public method-wrapper) and must be installed AFTER it. This patch
+# only inserts this bundle's own two rows below and never touches overlay
+# rows; the host must already provide a working `direnv` executable — neither
+# row installs direnv nor runs `direnv allow`.
 #
-# The provider row's config states the full deployed values explicitly (a
-# patch row replaces the target row's whole config, never a deep merge) so
-# `dsh --dump-config` shows every field even though they equal the schema
-# defaults.
+# - workspace-envrc: the `workspaceEnvrc` provider row (default-exported
+#   Service; strict Config below). The row's config states the full deployed
+#   values explicitly (a patch row replaces the target row's whole config,
+#   never a deep merge) so `dsh --dump-config` shows every field even though
+#   they equal the schema defaults.
+# - workspace-envrc-integration: the single wiring row. It injects
+#   agents/shell/sandbox/subprocess/terminals/workspaceEnvrc, installs the
+#   reversible Bash adapter (ctx.shell.resolve) then the persistent-terminal
+#   adapter (operation-local AsyncLocalStorage over ctx.terminals.spawn,
+#   wrapping the ctx.sandbox.confine argv commit seam or the
+#   ctx.subprocess.spawnTerminal spec argv with the deferred managed-env
+#   wrapper) inside one effect, and reverse-disposes terminal-first then Bash
+#   on fiber unload; a failing Terminal install rolls back the already
+#   installed Bash adapter.
 - insert:
     - id: workspace-envrc
       name: dsh-workspace-envrc

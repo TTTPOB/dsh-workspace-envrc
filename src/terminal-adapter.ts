@@ -1,5 +1,5 @@
 /**
- * Reversible persistent-terminal adapter (Block C): applies the workspace's
+ * Reversible persistent-terminal adapter: applies the workspace's
  * native direnv environment to every explicitly owned
  * `ctx.terminals.spawn(owner, request, signal)` creation chain.
  *

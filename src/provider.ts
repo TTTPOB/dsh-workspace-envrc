@@ -2,13 +2,10 @@
  * `workspaceEnvrc` service provider: applies the local machine's native
  * direnv environment to explicitly Agent/workspace-owned executions.
  *
- * Block A implements the provider core: strict Config validation, a bounded
- * activation preflight (native `direnv version` plus the shim shell check,
- * strictly awaited before this service is ready), Agent→workspace resolution
- * through scope ancestry, and the pure POSIX argv/command wrappers. Block B
- * wires the reversible Bash adapter over `ctx.shell.resolve` and Block C the
- * persistent-terminal adapter over `ctx.terminals.spawn` (with the deferred
- * managed-env capture wrapper), both installed by `./integration-plugin.js`.
+ * The provider owns strict Config validation, a bounded activation preflight,
+ * Agent-to-workspace resolution through scope ancestry, and the pure POSIX
+ * argv/command wrappers. `./integration-plugin.js` installs the reversible
+ * Bash and persistent-terminal adapters that consume these projections.
  *
  * The plugin never calls `direnv allow`/`deny`/`permit`/`grant`/`edit`,
  * never parses or sources `.envrc`, never mutates `process.env`, and never
@@ -144,7 +141,7 @@ export default class WorkspaceEnvrc extends Service {
   }
 
   /**
-   * Read-only projection of the `enableTerminal` config (Block C). Never a
+   * Read-only projection of the `enableTerminal` config. Never a
    * mutable config handle.
    */
   get terminalEnabled(): boolean {

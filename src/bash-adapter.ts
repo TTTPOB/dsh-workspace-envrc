@@ -2,8 +2,7 @@
  * Reversible Bash adapter: applies the workspace's native direnv environment
  * to every Agent-owned `ctx.shell.resolve()` call.
  *
- * Block B wires the provider's pure projections into the real execution path.
- * One wrapper is installed on the concrete `ctx.shell` provider target via
+ * One wrapper projects the provider into the concrete `ctx.shell` target via
  * the public `dsh-workspace-overlay/method-wrapper`; it rewrites only
  * `request.command` and delegates every other field by reference. The
  * decision inputs are read at each call:

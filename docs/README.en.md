@@ -2,64 +2,116 @@
 
 > **Languages / docs**: this is the English version of the project README; the Chinese original is [`../README.md`](../README.md). The implementation plan (in Chinese) is at [`implementation-plan.md`](./implementation-plan.md).
 
-Out-of-tree DSH bundle that applies the local machine's native direnv environment to explicitly Agent/workspace-owned Bash executions and persistent terminals. The plugin delegates discovery, `.envrc` evaluation, authorization hashes, `allow`/`deny`, stdlib behavior, and environment mutation to the installed `direnv` executable — it never parses or sources `.envrc`, never maintains an authorization database, never calls `direnv allow`, and never mutates the Harness process's `process.env`.
+An out-of-tree DSH bundle that applies the local machine's native direnv environment to explicitly Agent/workspace-owned Bash executions (foreground and background) and persistent terminal creation. The plugin delegates discovery, `.envrc` evaluation, authorization hashes, `allow`/`deny`, stdlib behavior, and environment mutation to the installed `direnv` executable — it never parses or sources `.envrc`, never maintains an authorization database, never calls `direnv allow`/`permit`/`grant`/`edit`, never uses `direnv export`, never watches or caches any `.envrc`, never mutates the Harness process's `process.env`, and exposes no allow/deny tool to models. Authorization always happens on the user's side, outside DSH, with `direnv allow <exact .envrc>`.
 
 Target DSH: `0.1.0-rc.6`. Runtime peers include `@deepseek-ai/cordis` 4.0.1, `@deepseek-ai/dsh-agent` / `@deepseek-ai/dsh-scope` / `@deepseek-ai/dsh-shell` / `@deepseek-ai/dsh-sandbox` / `@deepseek-ai/dsh-subprocess` / `@deepseek-ai/dsh-terminal` / `@deepseek-ai/dsh-timeout` 0.1.0-rc.6, and `dsh-workspace-overlay` ^0.1.0; `@deepseek-ai/schemastery` follows the actual identity policy as a plain dependency (the same declaration DSH's own packages and the sibling `dsh-workspace-overlay` repository use). All versions match the installed release.
 
-## Current status (Block A provider core + Block B Bash adapter + Block C terminal adapter)
+## Current state
 
-This repository is implemented in blocks per [`implementation-plan.md`](./implementation-plan.md). **Block A (package skeleton and the `workspaceEnvrc` provider core), Block B (the reversible Bash adapter), and Block C (the persistent-terminal adapter) are done**; Block D (real direnv allow/deny verification and release audit) remains.
+Everything is implemented and covered by tests: the `workspaceEnvrc` provider core, the reversible Bash adapter, the persistent-terminal adapter, the integration row, and two real-composition test paths (a real `direnv` allow/deny/content-change state machine, and a real Cordis Loader composing the built `dist` provider/integration rows). The implementation plan [`implementation-plan.md`](./implementation-plan.md) is marked **implemented**, and its completion criteria are met (except the final GitHub publication; see §10 of the plan). This README describes the current implementation facts and no longer narrates the work in historical blocks.
 
-- `ctx.workspaceEnvrc` (`WorkspaceEnvrc extends Service`, default export, `static inject = ['agents', 'workspaceCordis']`).
-- Strict Config (schema + semantic validation): `executable` (default `direnv`; non-empty, NUL-free, a PATH command or an absolute path), `shimShell` (default `/bin/bash`; must be absolute), `enableBash`/`enableTerminal` (default `true`), `versionCheckTimeoutMs` (default `5000`; a positive integer no greater than `MAX_TIMER_DELAY_MS`). Readonly `bashEnabled`/`terminalEnabled` getters serve the adapters; no mutable config handle is exposed.
-- Bounded activation preflight (strictly awaited inside `[Service.init]`; the service is not ready before init completes): `direnv version` and `<shimShell> --noprofile --norc -c 'exit 0'` — no `shell: true`, no workspace `.envrc` executed or read, no `process.env` mutation. Failure messages carry only the stage and the executable/path, never child stdout/stderr, environment, or secrets; the child is always reaped on timeout, abort, and init rollback (`done` is always awaited — no unhandled rejections). V1 is POSIX-only; Windows fails at activation. A third constructor argument is an injectable preflight spawn seam for deterministic tests (never part of the Config schema).
-- Agent→workspace resolution: start at `scopeOf(agent.ctx)` and walk `scopeParentOf`, asking `workspaceCordis.workspaceForScope` at every key, first hit wins (covers agent→preset→workspace chains); unscoped or unmapped agents yield `undefined`. No `session.header.cwd`, no cwd guessing, no import of the overlay's private coordinator.
-- Pure wrapper core (`dsh-workspace-envrc/core`): `direnv exec <canonical-workspace> <managed-env-shim> <original argv>`; the managed shim runs after direnv as `env -u BASH_ENV -u ENV <shimShell> --noprofile --norc -c SCRIPT label count name value... original argv`, the SCRIPT deletes every `${!DSH_@}` variable, restores only the request's exact managed `DSH_*` snapshot, then execs the original program; values travel through argv, never spliced into the script; managed names are validated strictly (`DSH_[A-Z0-9_]+`, string values). `wrapCommand` produces a POSIX-safe command (every dynamic argv element single-quoted; `'` and newlines handled, NUL rejected) that replaces only `request.command` — workdir, env, dshEnv, and everything else survive. The workspace is fixed at the canonical root; V1 never selects nested `.envrc` files from a per-command workdir.
-- **Block B: the Bash adapter (`dsh-workspace-envrc/bash-adapter`).** `installWorkspaceEnvrcBashAdapter(ctx)` reversibly decorates `resolve` on the concrete `ctx.shell` provider target through the public `dsh-workspace-overlay/method-wrapper`, returning an idempotent dispose handle (restores the exact prior descriptor; under double install an earlier handle's dispose never removes a later wrapper, and full restoration disposes in reverse install order). Per call: `bashEnabled` false → passthrough; no `ctx.agents.currentInitiator()` (agentless/direct Shell calls) → passthrough; `workspaceEnvrc.workspaceForAgent(agent)` unmapped → passthrough; mapped → only `request.command` is replaced with `wrapCommand(canonical, command, request.dshEnv ?? {})` while every other field (workdir/timeout/stdoutMaxBytes/signal/stdin/env/dshEnv/sandboxPolicy) keeps its exact reference and value, and the caller's request object is never mutated. `Reflect.apply(original, receiver, ...)` preserves the trace receiver (`this.ctx` inside the original resolver still names the caller's context). The workspace comes exclusively from the Agent's scope mapping — never guessed from `workdir` or `session.header.cwd`. A throwing `currentInitiator()` (agents service disposed out of dependency order) propagates out of `resolve` unchanged.
-- **Block C: the terminal adapter (`dsh-workspace-envrc/terminal-adapter`).** `installWorkspaceEnvrcTerminalAdapter(ctx)` reversibly decorates three public methods on their concrete provider targets through the public method-wrapper, returning an idempotent dispose handle (restores the exact prior descriptors in reverse install order — subprocess → sandbox → terminals; the same successor semantics as the Bash adapter). For each explicit `ctx.terminals.spawn(owner, request, signal)`:
-  - `terminalEnabled` false, a missing owner, or an unmapped `workspaceForAgent(owner)` → delegate unchanged (no operation context);
-  - otherwise an operation-local `AsyncLocalStorage` context `{owner, canonical, wrapped}` spans the whole unpublished creation chain (across the returned promise), so concurrent owners stay isolated;
-  - `ctx.sandbox.confine` (terminal-bash's argv commit seam): while an operation is active and not yet wrapped, replace the incoming argv with `wrapDeferredArgv(canonical, argv)` before delegating, then confirm `wrapped` — the sandbox wraps the whole direnv chain and `.envrc` evaluation stays inside confinement; a throwing wrapper/confine propagates unchanged;
-  - `ctx.subprocess.spawnTerminal`: while an operation is active and not yet wrapped (danger-full-access or a backend that never calls `confine`), replace only `spec.argv` with the deferred wrapper — `env`/`cwd`/`rows`/`cols`/`graceMs`/`signal` keep their exact references; never double-wrap; direct calls outside a spawn chain pass through untouched.
-  - **Deferred managed-env capture**: the backend builds the final `SubprocessTerminalSpawnSpec.env` (including `DSH_SESSION_ID`/`DSH_PTY_SESSION_ID`) only AFTER the confine seam, so the wrap is `env -u BASH_ENV -u ENV <shimShell> --noprofile --norc -c CAPTURE ...originalArgv`: the outer shim enumerates `${!DSH_@}` from ITS OWN process environment (the exact environment the subprocess provider merged from the final spec) into a Bash array, then execs `<direnv> exec <canonicalWorkspace>` plus the existing post-direnv restoration shim (deletes every post-direnv `DSH_*`, restores the captured exact snapshot, execs the original argv). All dynamic inputs travel through argv (NUL/empty validated); no `process.env`, no temp files, no `.envrc` parsing; `BASH_ENV`/`ENV` stay removed from the whole chain (the original program does not see them either). Installation requires `ctx.sandbox` to exist (the integration inject enforces it), so a late optional provider can never wrap direnv outside the sandbox.
-  - The terminal cwd stays backend-resolved; the environment is frozen at spawn — running terminals are never killed or restarted by adapter disposal, the interactive `cd` hook is not emulated, and only NEW terminals re-run direnv.
-- **Block B: the integration row (`dsh-workspace-envrc/integration-plugin`).** A function plugin (named exports `name`/`inject`/`apply`, no default), `inject = ['agents', 'shell', 'sandbox', 'subprocess', 'terminals', 'workspaceEnvrc']`; `ctx.effect` installs the Bash adapter first and the terminal adapter second, and fiber unload disposes terminal-first then Bash (HMR safe); a failing terminal adapter rolls back the already-installed Bash adapter (and the adapter itself rolls back its own partial install). `cordis.patch.yml` contains the `workspace-envrc` provider row and the single `workspace-envrc-integration` row — no additional integration row. With `enableBash: false`/`enableTerminal: false` the corresponding adapter may stay installed but is permanently transparent.
+## Dependencies and installation
 
-**Execution semantics (proven by tests)**:
+- This bundle is an independent repository that depends on the `dsh-workspace-overlay` bundle: `workspaceCordis` (canonical workspace identity and scope mapping) and the public `dsh-workspace-overlay/method-wrapper` (reversible method decoration).
+- **Install the overlay bundle first, then this bundle.** This bundle's patch (`cordis.patch.yml`) inserts only its own two rows (the provider row and the integration row) and **never inserts overlay rows automatically** — the overlay rows come from the overlay bundle's own patch, and `dsh plugin add` never rewrites a profile across bundles.
+- **The host must already have direnv installed**: activation preflight runs `direnv version`. This bundle neither installs direnv nor calls `direnv allow`; `.envrc` authorization is done manually outside DSH (see "Native direnv semantics").
 
-- Foreground and `run_in_background` both go through the same resolve wrapper: in the background path the `jobs.start` run starter (synchronous) calls `ctx.shell.resolve` inside the inherited initiator context and still sees the exact initiating Agent and its canonical workspace — not a coincidental workdir.
-- Two Agents in two workspaces run concurrently without cross-talk; agent→preset→workspace chains resolve to the workspace root.
-- Agentless/direct `ctx.shell.resolve()` calls pass through untouched, even when `workdir` lies inside a mapped workspace.
-- Native direnv semantics: a blocked/denied/changed-`.envrc` execution fails with native direnv's own stderr/exit status reaching the Bash/terminal caller; with no `.envrc`, native direnv executes with the inherited environment. **Real allow/deny behavior belongs to Block D**; the current tests prove the execution chain itself with fake executable shims.
-- `DSH_*` ownership: after direnv evaluation the shim deletes every `DSH_*` variable in the environment and restores only this request's managed snapshot (the terminal path's deferred capture shim records the exact snapshot from the spawned process environment before direnv). **Shim-controlled variables**: `BASH_ENV` and `ENV` are stripped for the shim and its whole exec chain by `env -u BASH_ENV -u ENV` — so the original program also never sees these two variables even when direnv (or the environment) sets them; every other ordinary variable (including credential-shaped ones) follows native direnv semantics. V1 does not refactor to a native shim; this is the current implementation fact.
-- **Terminal path** (verified over the real TerminalSessionService + terminal-bash composition): under a confined mode the `sandbox.confine` input starts with the deferred envrc wrapper and the final `spawnTerminal` argv starts with the sandbox runner with the whole direnv chain inside it — exactly once, never double-wrapped; `danger-full-access` never calls `confine` and the final argv is the deferred wrapper directly; the terminal cwd stays backend-resolved (request cwd or policy workspaceRoot); the final spec keeps `env`/`cwd`/`rows`/`cols`/`graceMs`/`signal` by exact reference, with `DSH_SESSION_ID`/`DSH_PTY_SESSION_ID` preserved in the env. The owner's canonical workspace is used regardless of the terminal cwd (exact owner workspace, never guessed from cwd). Two concurrent terminal creations in different workspaces stay isolated. Child-level executions prove deferred capture/restore, direnv-forged/added `DSH_*` facts are cleared, and a blocked direnv fails with its original stderr/status.
-- **Already-running terminal environments are frozen**: adapter disposal never kills or restarts processes; new terminals re-run direnv; an in-flight creation is never killed by disposal.
+```sh
+# 1) install the workspace overlay bundle first (provides workspaceCordis and method-wrapper)
+dsh plugin --profile web add /path/to/dsh-workspace-overlay
+# 2) then install this bundle
+dsh plugin --profile web add /path/to/dsh-workspace-envrc
+# 3) verify the final composition: this bundle's two rows and the full config are visible
+dsh --profile web --dump-config
+```
 
-**Not yet wired**: Block D (real direnv allow/deny verification and release audit). Workspace MCP, global MCP, LSP, subagent providers, and generic subprocess calls remain explicitly out of scope (see [`implementation-plan.md`](./implementation-plan.md) §8). The current bundle is loadable on its own.
+To uninstall: `dsh plugin --profile web remove dsh-workspace-envrc` (the overlay stays in place; without this bundle's wrappers, Bash and terminals return to their native unwrapped behavior).
 
-## API
+## Native direnv semantics
 
-- `WorkspaceEnvrc` (root export, default): `workspaceForAgent(agent)`, `wrapArgv(canonicalWorkspace, originalArgv, dshEnv?)`, `wrapCommand(canonicalWorkspace, originalCommand, dshEnv?)`, `wrapDeferredArgv(canonicalWorkspace, originalArgv)` (the Block C deferred capture chain), readonly `bashEnabled`/`terminalEnabled` getters.
-- `dsh-workspace-envrc/core`: `defaultConfig`, `assertWorkspaceEnvrcConfig`, `managedEnvPairs`, `buildManagedEnvShimArgv`, `buildExecArgv`, `buildDeferredManagedExecArgv`, `DEFERRED_ENV_CAPTURE_SCRIPT`, `DEFERRED_ENV_SHIM_LABEL`, `shq`, `wrapCommand`, `resolveAgentWorkspace`, `runPreflight`, `assertPosixPlatform`, `PreflightError`, and the related types. All are framework-free pure functions; the public surface never exposes secrets or environment snapshots.
+- **Fixed canonical workspace root lookup**: the workspace comes exclusively from the initiating Agent's scope mapping — start at `scopeOf(agent.ctx)` and walk `scopeParentOf`, asking `workspaceCordis.workspaceForScope` at every key, first hit wins (covers agent→preset→workspace chains); V1 never selects nested `.envrc` files from a per-command `workdir`, and never reads `session.header.cwd`.
+- **`direnv exec DIR` does not chdir**: the environment is loaded for the canonical root while the child's cwd stays where the caller (the Bash request's `workdir` / the terminal backend's resolved cwd) put it.
+- **No `.envrc` → passthrough**: when no `.envrc`/`.env` applies, native direnv executes with the inherited environment unchanged; there is no plugin-level fallback branch.
+- **Blocked / denied / changed content**: when the `.envrc` is not allowed, has been denied, or changed after `direnv allow` so the native hash is invalid, native direnv refuses the execution and its original stderr/exit status reaches the Bash or terminal caller; the original program never runs.
+- **Authorization happens outside DSH**: the user runs `direnv allow <exact .envrc>` manually in a local terminal under the same OS account that runs DSH; until re-allowed, later executions keep failing. DSH has no allow/deny/edit entry point.
+- **The plugin never calls**: `direnv allow`/`permit`/`grant`/`edit`, `direnv export`, any parse/source/hash/watch/cache of `.envrc`, or any read/write of `process.env`. **No allow/deny tool is exposed to models.**
+
+## Execution semantics
+
+### Bash (foreground and background)
+
+- Every execution is a **new process** (foreground or `run_in_background`); the environment snapshot freezes when the process starts, and no long-lived shell is reused.
+- `ctx.shell.resolve` is decorated: when `bashEnabled` is false, when `ctx.agents.currentInitiator()` is absent (agentless/direct Shell calls), or when `workspaceEnvrc.workspaceForAgent(agent)` is unmapped, the call passes through unchanged — even when `workdir` lies inside a mapped workspace, nothing is guessed.
+- When mapped, only `request.command` is replaced with `exec <direnv> exec <canonical-root> <managed-env-shim> <original>`; every other field (`workdir`/timeout/stdoutMaxBytes/signal/stdin/env/dshEnv/sandboxPolicy) keeps its exact reference and value, and the caller's request object is never mutated.
+- In the background path the `jobs.start` run starter (synchronous) calls `ctx.shell.resolve` inside the inherited initiator context and still sees the exact initiating Agent and its canonical workspace — not a coincidental workdir.
+- With sandboxing on, the whole wrapped chain (including `.envrc` evaluation) runs inside the executor's confine.
+
+### Terminal
+
+- Ownership is explicit: only `ctx.terminals.spawn(owner, request, signal)` creation chains are affected; when `terminalEnabled` is false, the owner is missing, or `workspaceForAgent(owner)` is unmapped, the call is delegated unchanged (no operation context is established).
+- Each spawn chain carries one operation-local `AsyncLocalStorage` context `{owner, canonical, wrapped}` across the whole unpublished creation chain (including the returned promise), so concurrent owners stay isolated.
+- **Deferred wrapper before confine**: `ctx.sandbox.confine(argv, policy)` (terminal-bash's argv commit seam) receives the deferred envrc wrapper — the sandbox wraps the whole direnv chain and `.envrc` evaluation stays inside confinement; a throwing wrapper/confine propagates unchanged.
+- **danger-full-access final fallback**: `danger-full-access` or a backend that never calls `confine` reaches `ctx.subprocess.spawnTerminal`, which replaces only `spec.argv` with the deferred wrapper; a chain is never wrapped twice, and direct calls outside a spawn chain pass through unchanged.
+- **DSH final environment capture**: the backend builds the final `SubprocessTerminalSpawnSpec.env` (including `DSH_SESSION_ID`/`DSH_PTY_SESSION_ID`) only AFTER the confine seam, so the outer capture shim enumerates `${!DSH_@}` from ITS OWN process environment (the exact environment the subprocess provider merged from the final spec) before direnv, then execs `<direnv> exec <canonical>` plus the post-direnv restoration shim (deletes every post-direnv `DSH_*`, restores the captured exact snapshot, execs the original argv).
+- **New-terminal snapshot**: the environment is frozen at spawn; **already-running terminals stay untouched** — adapter disposal never kills or restarts processes, in-flight creations are never killed, and only NEW terminals re-run direnv.
+- The interactive `cd` hook is **not emulated**: in-terminal directory changes are handled by the user shell's own direnv hook.
+
+## Environment safety
+
+- Ordinary environment variables (including credential-shaped variables an allowed `.envrc` explicitly exports) follow native direnv semantics: once the user allows the file, those variables enter the process environment and are **readable by the model** — a deliberate consequence of the user's native `direnv allow`.
+- `DSH_*` ownership: after direnv evaluation the shim deletes every `DSH_*` variable in the environment and restores only this request's exact managed snapshot (the terminal path's deferred capture records the exact snapshot from the spawned process environment before direnv). Managed names are strictly `DSH_[A-Z0-9_]+` with string values; values travel through argv, never spliced into the script.
+- **`BASH_ENV`/`ENV` are explicit exceptions**: `env -u BASH_ENV -u ENV` removes these two control variables from the whole chain, so neither the shim nor the original program sees them — even when direnv (or the environment) sets them. A plain direnv shell (an interactive shell's direnv hook) does not remove these two variables, so this is a documented difference between this chain and an ordinary direnv shell.
+- **Preflight is version/shell only, never `.envrc`**: activation runs `direnv version` and `env -u BASH_ENV -u ENV <shimShell> --noprofile --norc -c 'exit 0'` — no `shell: true`, no workspace `.envrc` executed or read, no `process.env` mutation; failure messages carry only the stage and the executable/path, never child stdout/stderr, environment, or secrets.
+- Diagnostics and errors never print stdout/stderr, environment, or secrets; the public API accepts and returns nothing sensitive beyond the environment projections.
+
+## Failure and lifecycle boundaries
+
+- **Activation failure**: a missing/unusable direnv, an invalid shim shell, or a preflight timeout fails the provider activation loudly, and no adapter is installed.
+- **Blocked/denied/changed content**: the original program does not run and the native error reaches the caller; the Agent, the workspace lease, and the plugin stay alive.
+- **HMR/dispose**: the exact previous method descriptors are restored (idempotent; an earlier dispose never removes a later wrapper, and full restoration disposes in reverse install order); already-spawned processes keep their environment and process owner and are never killed solely because a decorator unloads.
+- **Overlay disposed before this plugin**: later Agent lookups delegate unchanged (unmapped) or fail through the ordinary workspace lifecycle; no cached workspace path outlives the mapping.
+- **Concurrency**: Agents and terminal creations in different workspaces get independent native direnv evaluations with no cross-talk.
+- **Not covered**: Workspace MCP, global MCP, LSP, subagent providers, and generic `ctx.subprocess.spawn()` calls stay explicitly out of scope (the full non-goal list is in [`implementation-plan.md`](./implementation-plan.md) §8). **Windows is unsupported** (activation fails).
+- **No watcher / no auto restart**: this bundle watches no files (including `.envrc` — content changes are rejected by the native hash on the next execution); a `.envrc` change never automatically restarts a running background job or terminal.
+
+## Config
+
+The `workspaceEnvrc` provider row's schema (schema + semantic validation, implemented in `dsh-workspace-envrc/core`):
+
+| Field | Default | Constraint |
+|---|---|---|
+| `executable` | `direnv` | non-empty, NUL-free; a PATH command or an absolute path |
+| `shimShell` | `/bin/bash` | absolute path, NUL-free |
+| `enableBash` | `true` | boolean; when false the Bash adapter may stay installed but is permanently transparent |
+| `enableTerminal` | `true` | boolean; when false the terminal adapter may stay installed but is permanently transparent |
+| `versionCheckTimeoutMs` | `5000` | positive integer ≤ `MAX_TIMER_DELAY_MS` |
+
+Readonly `bashEnabled`/`terminalEnabled` getters serve the adapters; no mutable config handle is exposed. A third constructor argument is an injectable preflight spawn seam for deterministic tests (never part of the Config schema).
+
+## API and exports
+
+- Root export `dsh-workspace-envrc` (`dist/provider.js`, default export `WorkspaceEnvrc extends Service`): `workspaceForAgent(agent)`, `wrapArgv(canonicalWorkspace, originalArgv, dshEnv?)`, `wrapCommand(canonicalWorkspace, originalCommand, dshEnv?)`, `wrapDeferredArgv(canonicalWorkspace, originalArgv)` (the terminal deferred-capture chain), readonly `bashEnabled`/`terminalEnabled` getters.
+- `dsh-workspace-envrc/core`: `defaultConfig`, `assertWorkspaceEnvrcConfig`, `managedEnvPairs`, `buildManagedEnvShimArgv`, `buildExecArgv`, `buildDeferredManagedExecArgv`, `DEFERRED_ENV_CAPTURE_SCRIPT`, `DEFERRED_ENV_SHIM_LABEL`, `shq`, `wrapCommand`, `resolveAgentWorkspace`, `runPreflight`, `assertPosixPlatform`, `PreflightError`, and the related types. All are framework-free pure functions.
 - `dsh-workspace-envrc/bash-adapter`: `installWorkspaceEnvrcBashAdapter(ctx)` and `WorkspaceEnvrcBashAdapterHandle`.
 - `dsh-workspace-envrc/terminal-adapter`: `installWorkspaceEnvrcTerminalAdapter(ctx)` and `WorkspaceEnvrcTerminalAdapterHandle` (the operation-local AsyncLocalStorage context is internal).
 - `dsh-workspace-envrc/integration-plugin`: `name`/`inject`/`Config`/`apply` (function plugin, no default).
+- `dsh-workspace-envrc/cordis.patch.yml`: the bundle patch (two rows; see "Dependencies and installation").
 
 ## Development
 
 ```sh
 pnpm install        # repository-local store (see .npmrc)
-pnpm test           # full vitest suite
+pnpm test           # full vitest suite (builds dist first)
 pnpm typecheck      # strict typecheck of src + tests
 pnpm build          # tsc -> dist
 ```
 
-Tests never read or write the real user's direnv authorization state (no real `direnv allow`, no workspace `.envrc` execution); the shim script and the wrapped command are exercised through real child processes with explicit isolated environments (no `process.env` mutation); the background path is verified through the real AgentRegistry + ToolRuntime + tool-bash + jobs provider (only the `ctx.shell` provider is a recording stub).
+Tests never read or write the real user's direnv authorization state: `tests/direnv-native.spec.ts` drives the full allow/deny/content-change state machine and the deferred terminal wrapper through the real `direnv`, with all authorization state confined to repo-internal isolated `XDG_DATA_HOME`/`XDG_CONFIG_HOME`/`XDG_CACHE_HOME`/`HOME` (under `.artifacts/`, gitignored); the shim script and the wrapped command run through real child processes with explicit isolated environments (no `process.env` mutation); the background path is verified through the real AgentRegistry + ToolRuntime + tool-bash + jobs provider; the terminal path through the real TerminalSessionService + terminal-bash + SandboxPolicyService; `tests/loader-composition.spec.ts` composes the built `dist` provider/integration rows with real DSH services and overlay dependencies through a real Cordis Loader reading a test `cordis.yml`.
 
 ## Security and trust boundary
 
-- Authorization always happens on the user's native direnv side (`direnv allow` belongs to the user); changing an allowed `.envrc` invalidates the native hash and blocks later executions until the user re-allows. DSH has no allow/deny/edit entry point.
-- Every enabled execution is shaped as `direnv exec <canonical-root> <managed-env-shim> <original>`: evaluation and the command share one process tree (inside the executor's/terminal's confine when sandboxing is on); `DSH_*` ownership is restored after evaluation (the terminal path's deferred capture supplies the exact snapshot before spawn), `BASH_ENV`/`ENV` are control-variable exceptions removed from the whole chain (the original program does not see them either), and every other ordinary variable (including credential-shaped variables an allowed `.envrc` explicitly exports) follows native direnv semantics.
+- Authorization always happens on the user's native direnv side, outside DSH (`direnv allow` belongs to the user); changing an allowed `.envrc` invalidates the native hash and blocks later executions until the user re-allows. DSH has no allow/deny/edit entry point, and no allow/deny tool is exposed to models.
+- Every enabled execution is shaped as `direnv exec <canonical-root> <managed-env-shim> <original>`: evaluation and the command share one process tree (inside the executor's/terminal's confine when sandboxing is on); `DSH_*` ownership is restored after evaluation (the terminal path's deferred capture supplies the exact snapshot before spawn); `BASH_ENV`/`ENV` are control-variable exceptions removed from the whole chain (the original program does not see them either); every other ordinary variable (including credential-shaped variables an allowed `.envrc` explicitly exports) follows native direnv semantics.
 - Diagnostics and errors contain only the stage, the executable path, and exit facts — never stdout/stderr, environment, or secrets; the public API accepts and returns nothing sensitive beyond the environment projections.
 
 ## License
