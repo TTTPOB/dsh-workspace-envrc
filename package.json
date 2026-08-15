@@ -42,7 +42,7 @@
   "scripts": {
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json",
     "build": "tsc -p tsconfig.json",
-    "test": "vitest run"
+    "test": "pnpm build && vitest run"
   },
   "engines": {
     "node": "^22.19.0 || >=24.0.0"
@@ -63,6 +63,8 @@
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "4.0.1",
+    "@deepseek-ai/cordis-plugin-include": "1.0.6",
+    "@deepseek-ai/cordis-plugin-loader": "1.0.2",
     "@deepseek-ai/dsh-agent": "0.1.0-rc.6",
     "@deepseek-ai/dsh-jobs": "0.1.0-rc.6",
     "@deepseek-ai/dsh-jobs-local": "0.1.0-rc.6",
@@ -79,8 +81,10 @@
     "@deepseek-ai/dsh-timeout": "0.1.0-rc.6",
     "@deepseek-ai/dsh-tool-bash": "0.1.0-rc.6",
     "@deepseek-ai/dsh-tools": "0.1.0-rc.6",
+    "@types/js-yaml": "^4.0.9",
     "@types/node": "^24.0.0",
     "dsh-workspace-overlay": "file:../dsh-workspace-overlay",
+    "js-yaml": "^4.1.0",
     "typescript": "^5.9.0",
     "vitest": "^3.2.0"
   },

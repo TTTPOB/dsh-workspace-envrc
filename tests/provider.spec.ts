@@ -94,7 +94,7 @@ describe('WorkspaceEnvrc activation', () => {
     await vi.waitFor(() => expect(spawn).toHaveBeenCalledTimes(2))
     expect(spawn).toHaveBeenNthCalledWith(
       2,
-      ['/bin/bash', '--noprofile', '--norc', '-c', 'exit 0'],
+      ['env', '-u', 'BASH_ENV', '-u', 'ENV', '/bin/bash', '--noprofile', '--norc', '-c', 'exit 0'],
       expect.any(AbortSignal),
     )
     resolve(1, { code: 0, signal: null })

@@ -54,7 +54,7 @@ pnpm typecheck      # src + tests 严格类型检查
 pnpm build          # tsc -> dist
 ```
 
-测试不读取也不写入真实用户 direnv 授权状态（不调用真实 `direnv allow`，不执行 workspace `.envrc`）；shim 脚本与 wrapped command 用真实子进程在隔离显式环境中验证（不改 `process.env`）；后台路径用真实 AgentRegistry + ToolRuntime + tool-bash + jobs provider 验证（仅 `ctx.shell` provider 为记录型 stub）。
+测试不读取也不写入真实用户 direnv 授权状态（不调用真实 `direnv allow`，不执行 workspace `.envrc`）；shim 脚本与 wrapped command 用真实子进程在隔离显式环境中验证（不改 `process.env`）；后台路径用真实 AgentRegistry + ToolRuntime + tool-bash + jobs provider 验证（仅 `ctx.shell` provider 为记录型 stub）。Block D 起，测试矩阵新增两条真实组合路径：`tests/direnv-native.spec.ts` 用真实 `direnv` 驱动完整 allow/deny/内容变更状态机与 deferred terminal wrapper（授权状态全部落在仓库内隔离的 `XDG_DATA_HOME`/`XDG_CONFIG_HOME`/`XDG_CACHE_HOME`，用户真实授权状态仍不读取、不写入、不比较），`tests/loader-composition.spec.ts` 用真实 Cordis Loader 读取 test `cordis.yml` 组合内置 dist 的 provider/integration 行与真实 DSH services/overlay 依赖。
 
 ## 安全与信任边界
 

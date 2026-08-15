@@ -119,7 +119,10 @@ export default class WorkspaceEnvrc extends Service {
         spawn: this.runtime.spawn,
       })
       await runPreflight({
-        argv: [this.config.shimShell, '--noprofile', '--norc', '-c', 'exit 0'],
+        // Bash reads BASH_ENV even for non-interactive `-c` invocations;
+        // activation validates the binary without executing ambient startup
+        // code from the Harness process environment.
+        argv: ['env', '-u', 'BASH_ENV', '-u', 'ENV', this.config.shimShell, '--noprofile', '--norc', '-c', 'exit 0'],
         stage: 'shim shell',
         identity: this.config.shimShell,
         timeoutMs: this.config.versionCheckTimeoutMs,
