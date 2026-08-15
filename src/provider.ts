@@ -5,7 +5,8 @@
  * The provider owns strict Config validation, a bounded activation preflight,
  * Agent-to-workspace resolution through scope ancestry, and the pure POSIX
  * argv/command wrappers. `./integration-plugin.js` installs the reversible
- * Bash and persistent-terminal adapters that consume these projections.
+ * Bash, persistent-terminal, and workspace MCP adapters that consume these
+ * projections.
  *
  * The plugin never calls `direnv allow`/`deny`/`permit`/`grant`/`edit`,
  * never parses or sources `.envrc`, never mutates `process.env`, and never
@@ -65,6 +66,7 @@ export default class WorkspaceEnvrc extends Service {
     shimShell: z.string().default(defaultConfig.shimShell),
     enableBash: z.boolean().default(defaultConfig.enableBash),
     enableTerminal: z.boolean().default(defaultConfig.enableTerminal),
+    enableWorkspaceMcp: z.boolean().default(defaultConfig.enableWorkspaceMcp),
     versionCheckTimeoutMs: z
       .natural()
       .min(1)
@@ -157,6 +159,16 @@ export default class WorkspaceEnvrc extends Service {
    */
   get terminalEnabled(): boolean {
     return this.config.enableTerminal
+  }
+
+  /**
+   * Read-only projection of the `enableWorkspaceMcp` config. The MCP
+   * adapter checks this on every `workspaceMcp.activate` call: when false
+   * the adapter may stay installed but is permanently transparent. Never a
+   * mutable config handle.
+   */
+  get workspaceMcpEnabled(): boolean {
+    return this.config.enableWorkspaceMcp
   }
 
   /**

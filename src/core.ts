@@ -37,6 +37,8 @@ export interface WorkspaceEnvrcConfig {
   enableBash: boolean
   /** Whether the persistent-terminal adapter applies. */
   enableTerminal: boolean
+  /** Whether the workspace MCP adapter applies to mapped stdio rows. */
+  enableWorkspaceMcp: boolean
   /**
    * Activation preflight deadline in milliseconds: a positive integer no
    * greater than `MAX_TIMER_DELAY_MS`.
@@ -50,6 +52,7 @@ export const defaultConfig: WorkspaceEnvrcConfig = {
   shimShell: '/bin/bash',
   enableBash: true,
   enableTerminal: true,
+  enableWorkspaceMcp: true,
   versionCheckTimeoutMs: 5_000,
 }
 

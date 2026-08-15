@@ -2,22 +2,26 @@
  * Cordis function plugin wiring the workspace-envrc execution adapters into
  * a composition.
  *
- * Declares `agents`, `shell`, `sandbox`, `subprocess`, `terminals`, and
- * `workspaceEnvrc` as required services, so the row activates only once the
- * official agent registry, a shell provider, a sandbox provider, a subprocess
- * provider, the PTY registry, and this bundle's provider all exist. `apply`
- * installs the Bash adapter first and the persistent-terminal adapter second
- * inside one effect, so fiber unload (HMR safe) disposes terminal-first then
- * Bash; if the terminal adapter fails to install, the Bash adapter is rolled
- * back before the error propagates. Requiring `ctx.sandbox` up front (never a
- * late optional provider) guarantees direnv is always wrapped INSIDE the
- * sandbox when one is mounted.
+ * Declares `agents`, `shell`, `sandbox`, `subprocess`, `terminals`,
+ * `workspaceCordis`, `workspaceMcp`, and `workspaceEnvrc` as required
+ * services, so the row activates only once the official agent registry, a
+ * shell provider, a sandbox provider, a subprocess provider, the PTY
+ * registry, the workspace registry (the MCP adapter's scope authority), the
+ * workspace MCP manager, and this bundle's provider all exist. `apply`
+ * installs the Bash adapter first, the persistent-terminal adapter second,
+ * and the workspace MCP adapter third inside one effect, so fiber unload
+ * (HMR safe) disposes MCP-first then terminal then Bash; a failing later
+ * install rolls back every adapter already mounted by this call before the
+ * error propagates. Requiring `ctx.sandbox` up front (never a late optional
+ * provider) guarantees direnv is always wrapped INSIDE the sandbox when one
+ * is mounted.
  *
  * @module dsh-workspace-envrc/integration-plugin
  */
 import { type Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { installWorkspaceEnvrcBashAdapter } from './bash-adapter.js'
+import { installWorkspaceEnvrcMcpAdapter, type WorkspaceEnvrcMcpAdapterHandle } from './mcp-adapter.js'
 import {
   installWorkspaceEnvrcTerminalAdapter,
   type WorkspaceEnvrcTerminalAdapterHandle,
@@ -25,8 +29,17 @@ import {
 
 export const name = 'workspace-envrc-integration'
 
-/** Activate once the agent/shell/sandbox/subprocess/PTY registries and the workspaceEnvrc provider exist. */
-export const inject = ['agents', 'shell', 'sandbox', 'subprocess', 'terminals', 'workspaceEnvrc']
+/** Activate once the agent/shell/sandbox/subprocess/PTY/registry/MCP services and the workspaceEnvrc provider exist. */
+export const inject = [
+  'agents',
+  'shell',
+  'sandbox',
+  'subprocess',
+  'terminals',
+  'workspaceCordis',
+  'workspaceMcp',
+  'workspaceEnvrc',
+]
 
 /** No integration-local settings; feature switches belong to the provider row. */
 export interface Config {}
@@ -45,8 +58,19 @@ export function apply(ctx: Context, _config: Config): void {
       bashAdapter.dispose()
       throw error
     }
+    let mcpAdapter: WorkspaceEnvrcMcpAdapterHandle
+    try {
+      mcpAdapter = installWorkspaceEnvrcMcpAdapter(ctx)
+    } catch (error) {
+      // Partial-install rollback: a failing MCP adapter must not leave the
+      // Bash and terminal adapters mounted behind it.
+      terminalAdapter.dispose()
+      bashAdapter.dispose()
+      throw error
+    }
     return () => {
-      // Reverse install order: terminal adapter first, then the Bash adapter.
+      // Reverse install order: MCP adapter first, then terminal, then Bash.
+      mcpAdapter.dispose()
       terminalAdapter.dispose()
       bashAdapter.dispose()
     }

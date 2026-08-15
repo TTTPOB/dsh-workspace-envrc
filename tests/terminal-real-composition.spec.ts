@@ -10,6 +10,7 @@ import { DEFERRED_ENV_CAPTURE_SCRIPT, DEFERRED_ENV_SHIM_LABEL, defaultConfig, ty
 import * as Integration from '../src/integration-plugin.js'
 import WorkspaceEnvrc from '../src/provider.js'
 import {
+  inertWorkspaceMcp,
   mutableWorkspaceRegistry,
   okSpawn,
   RecordingSandbox,
@@ -76,6 +77,9 @@ async function setup(mode: 'read-only' | 'danger-full-access', config: Workspace
     disposeGraceMs: 20,
   }))
   ctx.provide('workspaceCordis', registry)
+  // The integration row injects the MCP manager; the terminal path never
+  // activates an MCP row, so an inert service satisfies activation.
+  ctx.provide('workspaceMcp', inertWorkspaceMcp())
   const Runtime = class extends WorkspaceEnvrc {
     constructor(applyCtx: Context) {
       super(applyCtx, config, { spawn: okSpawn() })

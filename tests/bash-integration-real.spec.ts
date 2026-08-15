@@ -17,6 +17,7 @@ import {
   inertSandbox,
   inertSubprocess,
   inertTerminals,
+  inertWorkspaceMcp,
   mutableWorkspaceRegistry,
   okSpawn,
   RecordingShellExecutor,
@@ -60,11 +61,12 @@ async function setup(config: WorkspaceEnvrcConfig = defaultConfig): Promise<Harn
   fibers.push(await ctx.plugin(RecordingShellExecutor))
   fibers.push(await ctx.plugin(ToolBash))
   ctx.provide('workspaceCordis', registry)
-  // The Block C integration row injects these; the Bash path never invokes
-  // them, so inert services satisfy activation without terminal residue.
+  // The integration row injects these; the Bash path never invokes
+  // them, so inert services satisfy activation without terminal/MCP residue.
   ctx.provide('terminals', inertTerminals())
   ctx.provide('sandbox', inertSandbox())
   ctx.provide('subprocess', inertSubprocess())
+  ctx.provide('workspaceMcp', inertWorkspaceMcp())
   const RuntimeProvider = class extends WorkspaceEnvrc {
     constructor(applyCtx: Context) {
       super(applyCtx, config, { spawn: okSpawn() })

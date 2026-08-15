@@ -92,4 +92,13 @@ describe('cordis.patch.yml bundle structure', () => {
     const bundle = pkg.dsh as { bundle?: { patch?: string } }
     expect(bundle?.bundle?.patch).toBe('./cordis.patch.yml')
   })
+
+  it('exports the MCP adapter subpath for the integration row and Loader consumers', () => {
+    const pkg = loadPackage()
+    const exportsMap = pkg.exports as Record<string, unknown>
+    const mcpExport = exportsMap['./mcp-adapter'] as { types?: string; default?: string } | undefined
+    expect(mcpExport).toBeDefined()
+    expect(mcpExport!.types).toBe('./dist/mcp-adapter.d.ts')
+    expect(mcpExport!.default).toBe('./dist/mcp-adapter.js')
+  })
 })

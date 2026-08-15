@@ -11,6 +11,7 @@ describe('WorkspaceEnvrc.Config schema', () => {
       shimShell: '/bin/bash',
       enableBash: true,
       enableTerminal: true,
+      enableWorkspaceMcp: true,
       versionCheckTimeoutMs: 5_000,
     })
   })
@@ -30,6 +31,8 @@ describe('WorkspaceEnvrc.Config schema', () => {
     expect(() => WorkspaceEnvrc.Config({ executable: 42 as never } as never)).toThrow()
     expect(() => WorkspaceEnvrc.Config({ shimShell: 42 as never } as never)).toThrow()
     expect(() => WorkspaceEnvrc.Config({ enableBash: 'yes' as never } as never)).toThrow()
+    expect(() => WorkspaceEnvrc.Config({ enableTerminal: 'yes' as never } as never)).toThrow()
+    expect(() => WorkspaceEnvrc.Config({ enableWorkspaceMcp: 'yes' as never } as never)).toThrow()
     expect(() => WorkspaceEnvrc.Config({ versionCheckTimeoutMs: 0 } as never)).toThrow()
     expect(() => WorkspaceEnvrc.Config({ versionCheckTimeoutMs: -1 } as never)).toThrow()
     expect(() => WorkspaceEnvrc.Config({ versionCheckTimeoutMs: 3.5 } as never)).toThrow()

@@ -10,6 +10,7 @@ import {
   inertSandbox,
   inertSubprocess,
   inertTerminals,
+  inertWorkspaceMcp,
   mutableWorkspaceRegistry,
   okSpawn,
   RecordingShellExecutor,
@@ -49,6 +50,9 @@ async function harness(config: WorkspaceEnvrcConfig = defaultConfig): Promise<Ha
   ctx.provide('terminals', inertTerminals())
   ctx.provide('sandbox', inertSandbox())
   ctx.provide('subprocess', inertSubprocess())
+  // The integration row injects the MCP manager; the Bash tests never
+  // activate an MCP row, so an inert service satisfies activation.
+  ctx.provide('workspaceMcp', inertWorkspaceMcp())
   const fibers: Fiber[] = []
   fibers.push(await ctx.plugin(RecordingShellExecutor))
   const RuntimeProvider = class extends WorkspaceEnvrc {

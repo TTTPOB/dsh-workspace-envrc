@@ -2,10 +2,11 @@
 # the integration row that wires its execution adapters.
 #
 # This bundle DEPENDS on the dsh-workspace-overlay bundle (workspaceCordis
-# service + public method-wrapper) and must be installed AFTER it. This patch
-# only inserts this bundle's own two rows below and never touches overlay
-# rows; the host must already provide a working `direnv` executable — neither
-# row installs direnv nor runs `direnv allow`.
+# service, the workspace MCP manager, and the public method-wrapper) and must
+# be installed AFTER it. This patch only inserts this bundle's own two rows
+# below and never touches overlay rows; the host must already provide a
+# working `direnv` executable — neither row installs direnv nor runs
+# `direnv allow`.
 #
 # - workspace-envrc: the `workspaceEnvrc` provider row (default-exported
 #   Service; strict Config below). The row's config states the full deployed
@@ -13,14 +14,16 @@
 #   never a deep merge) so `dsh --dump-config` shows every field even though
 #   they equal the schema defaults.
 # - workspace-envrc-integration: the single wiring row. It injects
-#   agents/shell/sandbox/subprocess/terminals/workspaceEnvrc, installs the
-#   reversible Bash adapter (ctx.shell.resolve) then the persistent-terminal
-#   adapter (operation-local AsyncLocalStorage over ctx.terminals.spawn,
-#   wrapping the ctx.sandbox.confine argv commit seam or the
-#   ctx.subprocess.spawnTerminal spec argv with the deferred managed-env
-#   wrapper) inside one effect, and reverse-disposes terminal-first then Bash
-#   on fiber unload; a failing Terminal install rolls back the already
-#   installed Bash adapter.
+#   agents/shell/sandbox/subprocess/terminals/workspaceMcp/workspaceEnvrc and
+#   installs, in order inside one effect: the reversible Bash adapter
+#   (ctx.shell.resolve), the persistent-terminal adapter (operation-local
+#   AsyncLocalStorage over ctx.terminals.spawn, wrapping the
+#   ctx.sandbox.confine argv commit seam or the ctx.subprocess.spawnTerminal
+#   spec argv with the deferred managed-env wrapper), and the workspace MCP
+#   adapter (ctx.workspaceMcp.activate, wrapping only mapped workspace stdio
+#   rows with an empty managed snapshot). Fiber unload reverse-disposes
+#   MCP-first then terminal then Bash; a failing later install rolls back
+#   every adapter already mounted by the same call.
 - insert:
     - id: workspace-envrc
       name: dsh-workspace-envrc
@@ -29,6 +32,7 @@
         shimShell: /bin/bash
         enableBash: true
         enableTerminal: true
+        enableWorkspaceMcp: true
         versionCheckTimeoutMs: 5000
     - id: workspace-envrc-integration
       name: dsh-workspace-envrc/integration-plugin

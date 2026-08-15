@@ -2,17 +2,17 @@
 
 > English version: [docs/README.en.md](docs/README.en.md)
 
-DSH 树外独立 bundle：把本机原生 direnv 环境应用到显式归属于 Agent/workspace 的 Bash 执行（foreground 与 background）与持久终端创建。插件把「发现、`.envrc` 求值、授权 hash、allow/deny、stdlib、环境变更」全部委托给已安装的 `direnv` 可执行文件——它绝不解析或 source `.envrc`、绝不维护授权数据库、绝不调用 `direnv allow`/`permit`/`grant`/`edit`、绝不使用 `direnv export`、不 watch 也不缓存任何 `.envrc`、绝不修改 Harness 进程的 `process.env`，并且不向模型暴露任何 allow/deny 工具。授权始终由用户在 DSH 之外的终端里用 `direnv allow <exact .envrc>` 完成。
+DSH 树外独立 bundle：把本机原生 direnv 环境应用到显式归属于 Agent/workspace 的 Bash 执行（foreground 与 background）、持久终端创建与本地 stdio workspace MCP 行。插件把「发现、`.envrc` 求值、授权 hash、allow/deny、stdlib、环境变更」全部委托给已安装的 `direnv` 可执行文件——它绝不解析或 source `.envrc`、绝不维护授权数据库、绝不调用 `direnv allow`/`permit`/`grant`/`edit`、绝不使用 `direnv export`、不 watch 也不缓存任何 `.envrc`、绝不修改 Harness 进程的 `process.env`，并且不向模型暴露任何 allow/deny 工具。授权始终由用户在 DSH 之外的终端里用 `direnv allow <exact .envrc>` 完成。
 
 目标 DSH：`0.1.0-rc.6`。运行时 peer 包括 `@deepseek-ai/cordis` 4.0.1、`@deepseek-ai/dsh-agent` / `@deepseek-ai/dsh-scope` / `@deepseek-ai/dsh-shell` / `@deepseek-ai/dsh-sandbox` / `@deepseek-ai/dsh-subprocess` / `@deepseek-ai/dsh-terminal` / `@deepseek-ai/dsh-timeout` 0.1.0-rc.6 与 `dsh-workspace-overlay` ^0.1.0；`@deepseek-ai/schemastery` 按实际身份策略作为普通依赖（与 DSH 各包及兄弟仓库 `dsh-workspace-overlay` 的声明方式一致）。版本均与安装版一致。
 
 ## 当前状态
 
-全部能力已实现并有测试覆盖：`workspaceEnvrc` provider core、可逆 Bash adapter、持久终端 adapter、集成行，以及两条真实组合测试路径（真实 `direnv` 的 allow/deny/内容变更状态机、真实 Cordis Loader 组合内置 dist 的 provider/integration 行）。实现计划 [docs/implementation-plan.md](docs/implementation-plan.md) 状态为 **implemented and published**，全部完成标准已达成。本 README 描述当前实现事实，不再按历史 Block 分期叙述。
+全部能力已实现并有测试覆盖：`workspaceEnvrc` provider core、可逆 Bash adapter、持久终端 adapter、workspace MCP adapter（§11，源码与确定性单测已完成；真实 MCP SDK fixture 与 workspace 配置热重载验证是下一块）、集成行，以及两条真实组合测试路径（真实 `direnv` 的 allow/deny/内容变更状态机、真实 Cordis Loader 组合内置 dist 的 provider/integration 行）。实现计划 [docs/implementation-plan.md](docs/implementation-plan.md) §9 状态为 **implemented and published**，§11 状态为 **source and deterministic unit tests implemented**。本 README 描述当前实现事实，不再按历史 Block 分期叙述。
 
 ## 依赖与安装
 
-- 本 bundle 是独立仓库，依赖 `dsh-workspace-overlay` bundle：`workspaceCordis`（canonical workspace 身份与 scope 映射）与公开的 `dsh-workspace-overlay/method-wrapper`（可逆方法装饰）。
+- 本 bundle 是独立仓库，依赖 `dsh-workspace-overlay` bundle：`workspaceCordis`（canonical workspace 身份与 scope 映射）、`workspaceMcp`（workspace-aware MCP manager，由 overlay 的 `workspace-mcp-manager` 行提供）与公开的 `dsh-workspace-overlay/method-wrapper`（可逆方法装饰）。
 - **安装顺序：先装 overlay bundle，再装本 bundle。** 本 bundle 的 patch（`cordis.patch.yml`）只插入自己的两行（provider 行 + 集成行），**绝不自动插入 overlay 行**——overlay 行由 overlay 自己的 bundle patch 提供，`dsh plugin add` 不会跨 bundle 改写 profile。
 - **系统必须已安装 direnv**：激活 preflight 会运行 `direnv version`。本 bundle 不安装 direnv，也不调用 `direnv allow`；`.envrc` 授权由用户在 DSH 外人工完成（见「原生 direnv 语义」）。
 
@@ -56,10 +56,18 @@ dsh --profile web --dump-config
 - **新 terminal 快照**：环境在 spawn 时冻结；**已运行 terminal 不变**——adapter dispose 不杀进程、不重启，in-flight 创建不被 kill；只有新 terminal 重新 direnv。
 - 交互式 `cd` hook **不仿真**：终端内目录变化由用户 shell 自己的 direnv hook 处理。
 
+### Workspace MCP（本地 stdio 行）
+
+- **scope 权威分类**：装饰公开的 `ctx.workspaceMcp.activate(rowCtx, rawConfig)`。`workspaceMcpEnabled` 为 false、`rowCtx` 不是 Cordis Context、缺 rawConfig、`scopeOf(rowCtx) === undefined`（global 行）、scope 未被 `workspaceCordis.workspaceForScope` 映射（preset/foreign 行，让 manager 自己拒绝）时一律原样透传，raw config 对象身份与字节不变；streamable-http 行（无本地子进程）与 malformed config 也原样透传，manager schema 产生原错误。
+- **只替换 command/args**：mapped workspace 的合法 stdio 行（`transport === 'stdio'`、非空 string `command`、`string[]` `args`）替换为 `<direnv> exec <canonical-root> <managed-env-shim> <command> <args...>`；其余字段（`cwd`/`env`/reconnect/toolCallTimeoutMs 等）引用与值原样保留，调用方 raw config 对象不被修改。manager 仍负责 workspace cwd 解析与连接/进程/工具/mask/重试/拆除生命周期。
+- **空 managed snapshot（重要修正）**：MCP SDK stdio transport 的子进程环境是 `{...scrubbedParentEnv(), ...config.env}`——ambient `DSH_*` 在子进程存在前就被 scrub，**没有 Harness managed snapshot**。因此 wrapped argv 携带**空快照**（不是 terminal 的 deferred capture）：direnv 求值后 shim 删除环境里全部 `DSH_*`（包括 workspace config 或已 allow 的 `.envrc` 显式导出的——config 不得伪造 Harness namespace）并恢复为空；ordinary config env 与 `.envrc` 导出遵循原生 direnv 语义。
+- **MCP 行必须在精确 workspace scope**：只有 `scopeOf(rowCtx)` 自身被映射的行被包装；preset 子 scope 行（即使父链指向 workspace）透传并让 manager 拒绝。
+- **receiver/promise/error 原样**：精确 receiver 透传，manager 返回的 promise 与抛出的错误原样到达调用方。
+
 ## 环境安全
 
 - 普通环境变量（包括被允许的 `.envrc` 显式导出的 credential-shaped 变量）遵循原生 direnv 语义：一旦用户 allow，这些变量进入该进程环境，**模型可读取**（这是用户原生 `direnv allow` 的刻意后果）。
-- `DSH_*` 归属：direnv 求值后 shim 删除环境里全部 `DSH_*`，只恢复本次请求的精确 managed 快照（terminal 路径由 deferred capture 在 direnv 之前从 spawn 进程环境捕获精确快照）。managed name 严格 `DSH_[A-Z0-9_]+` 且 value 为 string；value 全部走 argv，不拼进脚本。
+- `DSH_*` 归属：direnv 求值后 shim 删除环境里全部 `DSH_*`，只恢复本次请求的精确 managed 快照（terminal 路径由 deferred capture 在 direnv 之前从 spawn 进程环境捕获精确快照；MCP 路径的子进程环境已被 scrub 且无 managed snapshot，因此快照为空——direnv 之后全部 `DSH_*` 被删除、恢复为空，config/.envrc 显式写的 `DSH_*` 同样被清除）。managed name 严格 `DSH_[A-Z0-9_]+` 且 value 为 string；value 全部走 argv，不拼进脚本。
 - **`BASH_ENV`/`ENV` 是明确例外**：post-direnv shim 与原始程序都在 `env -u BASH_ENV -u ENV` 后运行，因此看不到 direnv 设置的这两个控制变量。Bash工具的既有外层executor shell以及direnv自身的求值shell仍可能读取启动前ambient的`BASH_ENV`；插件不把这个Host输入继续传给post-direnv段。Terminal路径的deferred argv则从最外层开始移除它们。普通direnv shell不会做这种移除，因此这是文档化差异。
 - **preflight只验证version与shim语义，不读`.envrc`**：激活先运行`direnv version`，再在配置的shell下实际运行一次`DSH_*`清除/恢复probe；两个child都bounded，不用`shell: true`，不执行、不读取任何workspace `.envrc`，不改`process.env`。probe同时验证Bash 3.2+兼容的`${!DSH_*}`行为；失败消息只含stage与executable/path，不含子进程stdout/stderr/env/secret。
 - **sandbox必须能读取原生allow数据库**：direnv在confine内部校验授权。若部署把`XDG_DATA_HOME`放在sandbox会遮蔽的位置（例如local bwrap用tmpfs覆盖的`/tmp`），sandbox内会把外部已allow的`.envrc`视为blocked；请把direnv授权状态放在sandbox可读的持久目录。
@@ -72,9 +80,9 @@ dsh --profile web --dump-config
 - **HMR/dispose**：还原确切的先前 method descriptor（幂等；后装 wrapper 不会被先装者的 dispose 移除，完全还原按逆安装序 dispose）；已启动进程保留其环境与进程属主，不因 decorator 卸载被杀。
 - **overlay 先于本插件卸载**：后续 Agent 查找无映射 → 原样透传，或按普通 workspace 生命周期失败；没有缓存的 workspace 路径比映射活得更久。
 - **并发**：不同 workspace 的 Agent / 终端创建各自独立 direnv 求值，互不串扰。
-- **组合要求**：唯一integration row同时注入`agents`、`shell`、`sandbox`、`subprocess`、`terminals`与`workspaceEnvrc`，保证terminal的direnv链不会落到late sandbox外；缺少任何一个service时整行保持pending，Bash adapter也不会单独安装，即使`enableTerminal: false`。
-- **不覆盖**：Workspace MCP、global MCP、LSP、subagent providers 与 generic `ctx.subprocess.spawn()` 明确不在范围（完整非目标清单见 [docs/implementation-plan.md](docs/implementation-plan.md) §8）。**Windows 不支持**（激活即失败）。
-- **no watcher / no auto restart**：本 bundle 不 watch 任何文件（包括 `.envrc`——内容变更由原生 direnv 在下次执行时按 hash 拒绝）；`.envrc` 变化后不自动重启后台 job 或已运行 terminal。
+- **组合要求**：唯一integration row同时注入`agents`、`shell`、`sandbox`、`subprocess`、`terminals`、`workspaceCordis`、`workspaceMcp`与`workspaceEnvrc`，保证terminal的direnv链不会落到late sandbox外；缺少任何一个service时整行保持pending，任何 adapter 都不会单独安装，即使 `enableTerminal: false` 或 `enableWorkspaceMcp: false`。
+- **不覆盖**：global MCP、LSP、subagent providers 与 generic `ctx.subprocess.spawn()` 明确不在范围（完整非目标清单见 [docs/implementation-plan.md](docs/implementation-plan.md) §8；Workspace MCP 已由 §11 覆盖）。**Windows 不支持**（激活即失败）。
+- **no watcher / no auto restart**：本 bundle 不 watch 任何文件（包括 `.envrc`——内容变更由原生 direnv 在下次执行时按 hash 拒绝）；`.envrc` 变化后不自动重启后台 job、已运行 terminal 或已运行的 workspace MCP 进程。MCP 进程环境在 spawn 时冻结；保存/触碰 workspace 顶层 `.dsh/cordis.yml` 走既有 WorkspaceTree 热重载：旧 MCP 进程被 dispose、新进程重新经过 direnv 启动（blocked 时保持可恢复语义，下次顶层配置事件重试）。
 
 ## Config
 
@@ -86,17 +94,19 @@ dsh --profile web --dump-config
 | `shimShell` | `/bin/bash` | 绝对路径、无 NUL |
 | `enableBash` | `true` | boolean；false 时 Bash adapter 可安装但永远透明 |
 | `enableTerminal` | `true` | boolean；false 时 terminal adapter 可安装但永远透明 |
+| `enableWorkspaceMcp` | `true` | boolean；false 时 MCP adapter 可安装但永远透明 |
 | `versionCheckTimeoutMs` | `5000` | 正整数且 ≤ `MAX_TIMER_DELAY_MS` |
 
-只读 getter `bashEnabled`/`terminalEnabled` 供 adapter 读取，不暴露可变 config。第三个构造函数参数是可注入的 preflight spawn seam（确定性测试用，不进 Config schema）。
+只读 getter `bashEnabled`/`terminalEnabled`/`workspaceMcpEnabled` 供 adapter 读取，不暴露可变 config。第三个构造函数参数是可注入的 preflight spawn seam（确定性测试用，不进 Config schema）。
 
 ## API 与 exports
 
-- 根导出 `dsh-workspace-envrc`（`dist/provider.js`，默认导出 `WorkspaceEnvrc extends Service`）：`workspaceForAgent(agent)`、`wrapArgv(canonicalWorkspace, originalArgv, dshEnv?)`、`wrapCommand(canonicalWorkspace, originalCommand, dshEnv?)`、`wrapDeferredArgv(canonicalWorkspace, originalArgv)`（终端的 deferred capture 链），只读 `bashEnabled`/`terminalEnabled`。
+- 根导出 `dsh-workspace-envrc`（`dist/provider.js`，默认导出 `WorkspaceEnvrc extends Service`）：`workspaceForAgent(agent)`、`wrapArgv(canonicalWorkspace, originalArgv, dshEnv?)`、`wrapCommand(canonicalWorkspace, originalCommand, dshEnv?)`、`wrapDeferredArgv(canonicalWorkspace, originalArgv)`（终端的 deferred capture 链），只读 `bashEnabled`/`terminalEnabled`/`workspaceMcpEnabled`。
 - `dsh-workspace-envrc/core`：`defaultConfig`、`assertWorkspaceEnvrcConfig`、`managedEnvPairs`、`buildManagedEnvShimArgv`、`buildExecArgv`、`buildDeferredManagedExecArgv`、`DEFERRED_ENV_CAPTURE_SCRIPT`、`DEFERRED_ENV_SHIM_LABEL`、`shq`、`wrapCommand`、`resolveAgentWorkspace`、`runPreflight`、`assertPosixPlatform`、`PreflightError` 与相关类型；均为无框架纯函数。
 - `dsh-workspace-envrc/bash-adapter`：`installWorkspaceEnvrcBashAdapter(ctx)` 与 `WorkspaceEnvrcBashAdapterHandle`。
 - `dsh-workspace-envrc/terminal-adapter`：`installWorkspaceEnvrcTerminalAdapter(ctx)` 与 `WorkspaceEnvrcTerminalAdapterHandle`（operation-local ALS 上下文为内部实现）。
-- `dsh-workspace-envrc/integration-plugin`：`name`/`inject`/`Config`/`apply`（函数插件，无 default）。
+- `dsh-workspace-envrc/mcp-adapter`：`installWorkspaceEnvrcMcpAdapter(ctx)` 与 `WorkspaceEnvrcMcpAdapterHandle`（scope 权威分类；只包装 mapped workspace stdio 行，空 managed snapshot）。
+- `dsh-workspace-envrc/integration-plugin`：`name`/`inject`/`Config`/`apply`（函数插件，无 default；安装顺序 Bash→Terminal→MCP，卸载逆序）。
 - `dsh-workspace-envrc/cordis.patch.yml`：bundle patch（两行，见「依赖与安装」）。
 
 ## 开发
@@ -108,7 +118,7 @@ pnpm typecheck      # src + tests 严格类型检查
 pnpm build          # tsc -> dist
 ```
 
-测试从不读取、不写入真实用户 direnv 授权状态：`tests/direnv-native.spec.ts` 用真实 `direnv` 驱动完整 allow/deny/内容变更状态机与 deferred terminal wrapper，授权状态全部落在仓库内隔离的 `XDG_DATA_HOME`/`XDG_CONFIG_HOME`/`XDG_CACHE_HOME`/`HOME`（`.artifacts/` 下，gitignored）；shim 脚本与 wrapped command 用真实子进程在隔离显式环境中验证（不改 `process.env`）；后台路径用真实 AgentRegistry + ToolRuntime + tool-bash + jobs provider 验证；终端路径用真实 TerminalSessionService + terminal-bash + SandboxPolicyService 验证；`tests/loader-composition.spec.ts` 用真实 Cordis Loader 读取 test `cordis.yml`，组合内置 dist 的 provider/integration 行与真实 DSH services/overlay 依赖。
+测试从不读取、不写入真实用户 direnv 授权状态：`tests/direnv-native.spec.ts` 用真实 `direnv` 驱动完整 allow/deny/内容变更状态机与 deferred terminal wrapper，授权状态全部落在仓库内隔离的 `XDG_DATA_HOME`/`XDG_CONFIG_HOME`/`XDG_CACHE_HOME`/`HOME`（`.artifacts/` 下，gitignored）；shim 脚本与 wrapped command 用真实子进程在隔离显式环境中验证（不改 `process.env`）；`tests/mcp-adapter.spec.ts` 覆盖 MCP adapter 的 scope 分类/透传/生命周期，并用仓库内的 fake direnv 子进程执行 wrapped MCP argv（真实 MCP SDK fixture 属下一块）；后台路径用真实 AgentRegistry + ToolRuntime + tool-bash + jobs provider 验证；终端路径用真实 TerminalSessionService + terminal-bash + SandboxPolicyService 验证；`tests/loader-composition.spec.ts` 用真实 Cordis Loader 读取 test `cordis.yml`，组合内置 dist 的 provider/integration 行与真实 DSH services/overlay 依赖。
 
 ## 安全与信任边界
 

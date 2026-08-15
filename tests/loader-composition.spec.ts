@@ -24,9 +24,10 @@
  * The tests prove the patch export forms (provider default export,
  * integration named exports without default), that the integration row's
  * apply stays pending until every injected service exists and runs once
- * they do, that both adapters are live through the loaded composition, and
- * that disposing the integration fiber restores every decorated method
- * while the other rows stay composed. No Web server and no LLM are started.
+ * they do, that all three adapters (Bash, terminal, workspace MCP) are live
+ * through the loaded composition, and that disposing the integration fiber
+ * restores every decorated method while the other rows stay composed. No
+ * Web server and no LLM are started.
  *
  * @module tests/loader-composition
  */
@@ -38,7 +39,12 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
-import { DEFERRED_ENV_CAPTURE_SCRIPT, DEFERRED_ENV_SHIM_LABEL } from '../src/core.js'
+import {
+  DEFERRED_ENV_CAPTURE_SCRIPT,
+  DEFERRED_ENV_SHIM_LABEL,
+  MANAGED_ENV_SHIM_LABEL,
+  MANAGED_ENV_SHIM_SCRIPT,
+} from '../src/core.js'
 import * as IntegrationModule from '../src/integration-plugin.js'
 import * as ProviderModule from '../src/provider.js'
 
@@ -89,12 +95,19 @@ afterEach(async () => {
  * deliberate: the integration row comes FIRST so activation must wait on the
  * inject machinery, never on YAML order.
  */
-function composition(workspace: string, opts: { omitSandbox?: boolean } = {}): string {
+function composition(workspace: string, opts: { omitSandbox?: boolean; omitMcp?: boolean } = {}): string {
   const sandboxRow = opts.omitSandbox
     ? ''
     : [
         '- id: sandbox',
         `  name: ${fixtureUrl('recording-sandbox.mjs')}`,
+        '',
+      ].join('\n')
+  const mcpRow = opts.omitMcp
+    ? ''
+    : [
+        '- id: workspace-mcp',
+        `  name: ${fixtureUrl('recording-workspace-mcp.mjs')}`,
         '',
       ].join('\n')
   return [
@@ -110,6 +123,7 @@ function composition(workspace: string, opts: { omitSandbox?: boolean } = {}): s
     '    shimShell: /bin/bash',
     '    enableBash: true',
     '    enableTerminal: true',
+    '    enableWorkspaceMcp: true',
     '    versionCheckTimeoutMs: 5000',
     '',
     '- id: agents',
@@ -149,6 +163,7 @@ function composition(workspace: string, opts: { omitSandbox?: boolean } = {}): s
     '- id: subprocess',
     `  name: ${fixtureUrl('recording-subprocess.mjs')}`,
     '',
+    mcpRow,
     // The real workspace overlay: its loader inject is satisfied by the
     // Loader mounted below; the overlay bundle provides the workspaceCordis
     // service the envrc provider row injects.
@@ -227,8 +242,27 @@ function resolveAs(c: Case, agent: Agent, command: string): { command: string } 
   ) as { command: string }
 }
 
+/** One raw workspace stdio MCP row config, as a workspace composition would carry. */
+function stdioConfig(serverName: string): Record<string, unknown> {
+  return {
+    transport: 'stdio',
+    serverName,
+    command: '/bin/echo',
+    args: ['hi'],
+    env: { ORDINARY: 'value' },
+    cwd: '',
+    toolCallTimeoutMs: 60_000,
+    failOnStartupError: true,
+  }
+}
+
+/** The loaded recording workspaceMcp provider's captured activations. */
+function mcpProvider(c: Case): { activations: Array<{ rawConfig: unknown }> } {
+  return c.ctx.workspaceMcp as unknown as { activations: Array<{ rawConfig: unknown }> }
+}
+
 describe('real Loader composition of dsh-workspace-envrc', () => {
-  it('composes the bundle rows through the real Loader and activates both adapters', async () => {
+  it('composes the bundle rows through the real Loader and activates all three adapters', async () => {
     const c = await bootCase(composition)
     try {
       // Boot the tree: activation runs the REAL preflight (`direnv version`
@@ -257,12 +291,14 @@ describe('real Loader composition of dsh-workspace-envrc', () => {
         'sandbox',
         'subprocess',
         'terminals',
+        'workspaceCordis',
+        'workspaceMcp',
         'workspaceEnvrc',
       ])
       expect(typeof IntegrationModule.apply).toBe('function')
 
       // The real overlay registry provides workspaceCordis; acquiring the
-      // workspace mints the scope mapping the adapter resolves through.
+      // workspace mints the scope mapping the adapters resolve through.
       const registry = c.ctx.workspaceCordis
       const lease = await registry.acquire(c.workspace)
       const agent = makeAgent(c, lease, 'agent-lc')
@@ -289,6 +325,33 @@ describe('real Loader composition of dsh-workspace-envrc', () => {
         expect(confined.argv).toContain(c.workspace)
         const subprocess = c.ctx.subprocess as unknown as { terminalSpecs: Array<{ argv: string[] }> }
         expect(subprocess.terminalSpecs[0]!.argv).toEqual(['/sandbox', '--', ...confined.argv])
+
+        // MCP adapter live: a workspace stdio row under the lease scope is
+        // wrapped with the exact empty-snapshot argv naming the canonical
+        // root; the recording provider never spawns anything.
+        const rawConfig = stdioConfig('lc-srv')
+        await c.ctx.workspaceMcp.activate(lease.ctx, rawConfig)
+        const next = mcpProvider(c).activations.at(-1)!.rawConfig as { command: string; args: string[] }
+        expect(next).not.toBe(rawConfig)
+        expect([next.command, ...next.args]).toEqual([
+          'direnv',
+          'exec',
+          c.workspace,
+          'env',
+          '-u',
+          'BASH_ENV',
+          '-u',
+          'ENV',
+          '/bin/bash',
+          '--noprofile',
+          '--norc',
+          '-c',
+          MANAGED_ENV_SHIM_SCRIPT,
+          MANAGED_ENV_SHIM_LABEL,
+          '0',
+          '/bin/echo',
+          'hi',
+        ])
       } finally {
         detach()
       }
@@ -319,6 +382,11 @@ describe('real Loader composition of dsh-workspace-envrc', () => {
         // on its sandbox inject (the resolve passes through unwrapped).
         const pending = resolveAs(c, agent, 'echo pending')
         expect(pending.command).toBe('echo pending')
+        // The MCP adapter is equally gated: activate passes the raw config
+        // identity through to the recording provider.
+        const pendingMcp = stdioConfig('pending-srv')
+        await c.ctx.workspaceMcp.activate(lease.ctx, pendingMcp)
+        expect(mcpProvider(c).activations.at(-1)!.rawConfig).toBe(pendingMcp)
 
         // The missing provider arrives as a new loader row (the shipped
         // loader types omit the optional id; the runtime generates one):
@@ -327,6 +395,50 @@ describe('real Loader composition of dsh-workspace-envrc', () => {
         await c.ctx.loader.await()
         const active = resolveAs(c, agent, 'echo now-active')
         expect(active.command.startsWith(`exec 'direnv' 'exec' '${c.workspace}'`)).toBe(true)
+        const activeMcp = stdioConfig('active-srv')
+        await c.ctx.workspaceMcp.activate(lease.ctx, activeMcp)
+        const wrapped = mcpProvider(c).activations.at(-1)!.rawConfig as { command: string }
+        expect(wrapped.command).toBe('direnv')
+        expect(wrapped).not.toBe(activeMcp)
+      } finally {
+        detach()
+      }
+    } finally {
+      await c.ctx.fiber.dispose()
+      await rm(c.root, { recursive: true, force: true })
+      const index = liveCases.indexOf(c)
+      if (index >= 0) liveCases.splice(index, 1)
+    }
+  })
+
+  it('keeps the integration row pending on a missing workspaceMcp and activates when it arrives', async () => {
+    const c = await bootCase((workspace) => composition(workspace, { omitMcp: true }))
+    try {
+      await c.includeReady
+      await c.ctx.loader.await()
+      expect(c.ctx.get('workspaceMcp')).toBeUndefined()
+
+      const registry = c.ctx.workspaceCordis
+      const lease = await registry.acquire(c.workspace)
+      const agent = makeAgent(c, lease, 'agent-mcp-pending')
+      const detach = c.ctx.agents.register(agent)
+      try {
+        // Without the workspaceMcp service the whole row stays pending: the
+        // Bash adapter is not installed either.
+        const pending = resolveAs(c, agent, 'echo mcp-pending')
+        expect(pending.command).toBe('echo mcp-pending')
+
+        // The recording manager arrives as a new loader row: the inject gate
+        // opens and every adapter activates.
+        await c.ctx.loader.create({ name: fixtureUrl('recording-workspace-mcp.mjs') })
+        await c.ctx.loader.await()
+        const active = resolveAs(c, agent, 'echo mcp-active')
+        expect(active.command.startsWith(`exec 'direnv' 'exec' '${c.workspace}'`)).toBe(true)
+        const rawConfig = stdioConfig('late-srv')
+        await c.ctx.workspaceMcp.activate(lease.ctx, rawConfig)
+        const wrapped = mcpProvider(c).activations.at(-1)!.rawConfig as { command: string }
+        expect(wrapped.command).toBe('direnv')
+        expect(wrapped).not.toBe(rawConfig)
       } finally {
         detach()
       }
@@ -368,13 +480,21 @@ describe('real Loader composition of dsh-workspace-envrc', () => {
         expect(sandbox.calls[0]!.argv).toEqual(['/bin/bash', '--noprofile', '--norc', '-i'])
         expect(sandbox.calls[0]!.argv).not.toContain(DEFERRED_ENV_CAPTURE_SCRIPT)
 
-        // The other rows stay composed: provider, agents, terminals, and the
-        // real overlay registry all remain live.
+        // The MCP adapter is restored too: activate passes the raw config
+        // identity through to the recording provider.
+        const afterMcp = stdioConfig('after-srv')
+        await c.ctx.workspaceMcp.activate(lease.ctx, afterMcp)
+        expect(mcpProvider(c).activations.at(-1)!.rawConfig).toBe(afterMcp)
+
+        // The other rows stay composed: provider, agents, terminals, the
+        // recording MCP manager, and the real overlay registry all remain
+        // live.
         const service = c.ctx.get('workspaceEnvrc') as { name: string } | undefined
         expect(service).toBeDefined()
         expect(service!.name).toBe('workspaceEnvrc')
         expect(c.ctx.get('agents')).toBeDefined()
         expect(c.ctx.get('terminals')).toBeDefined()
+        expect(c.ctx.get('workspaceMcp')).toBeDefined()
         expect(c.ctx.get('workspaceCordis')).toBeDefined()
         expect(registry.workspaceForScope(lease.key)).toBe(c.workspace)
       } finally {

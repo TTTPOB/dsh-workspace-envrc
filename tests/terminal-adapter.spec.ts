@@ -13,7 +13,7 @@ import {
 import * as Integration from '../src/integration-plugin.js'
 import WorkspaceEnvrc from '../src/provider.js'
 import { installWorkspaceEnvrcTerminalAdapter } from '../src/terminal-adapter.js'
-import { okSpawn, RecordingSandbox, RecordingShellExecutor } from './helpers.js'
+import { inertWorkspaceMcp, okSpawn, RecordingSandbox, RecordingShellExecutor } from './helpers.js'
 import { confinedBackend, terminalHarness, unconfinedBackend, type TerminalHarness } from './terminal-harness.js'
 
 /** The exact deferred wrapper prefix the adapter must hand to the sandbox. */
@@ -480,6 +480,10 @@ describe('workspace-envrc-integration plugin terminal wiring', () => {
           throw new Error('unused')
         },
       })
+      // The integration row injects the MCP manager too; the MCP stage is
+      // never reached here (the terminal stage fails first), but the row
+      // must be able to activate.
+      ctx.provide('workspaceMcp', inertWorkspaceMcp())
       fibers.push(await ctx.plugin(RecordingShellExecutor))
       const Runtime = class extends WorkspaceEnvrc {
         constructor(applyCtx: Context) {

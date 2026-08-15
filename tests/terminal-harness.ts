@@ -1,11 +1,13 @@
 /**
  * Shared unit harness for the terminal adapter: a real Cordis context, the
  * real workspaceEnvrc provider (ok preflight seam), the recording sandbox and
- * subprocess services, a recording shell provider, and a fake `terminals`
- * service whose `spawn` runs a configurable backend closure — the same
- * backend shape the official terminal-bash provider uses (confine the argv,
- * then `spawnTerminal` with the final spec). The fake lets unit tests pin the
- * adapter's wrapper mechanics without real PTYs or the registry.
+ * subprocess services, a recording shell provider, a recording
+ * `workspaceMcp` service (satisfies the integration row's inject), and a
+ * fake `terminals` service whose `spawn` runs a configurable backend
+ * closure — the same backend shape the official terminal-bash provider uses
+ * (confine the argv, then `spawnTerminal` with the final spec). The fake
+ * lets unit tests pin the adapter's wrapper mechanics without real PTYs or
+ * the registry.
  */
 import { Context, symbols, type Fiber } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
@@ -21,6 +23,7 @@ import {
   RecordingSandbox,
   RecordingShellExecutor,
   RecordingSubprocessRuntime,
+  RecordingWorkspaceMcp,
   mutableWorkspaceRegistry,
   okSpawn,
 } from './helpers.js'
@@ -100,6 +103,8 @@ export interface TerminalHarness {
   /** The raw recording shell executor (the Bash adapter's target). */
   shell: RecordingShellExecutor
   fakeTerminals: FakeTerminalsService
+  /** The recording workspaceMcp target (the MCP adapter's wrap target). */
+  mcp: RecordingWorkspaceMcp
   /** Install the terminal adapter on demand so tests can observe the baseline. */
   install(): WorkspaceEnvrcTerminalAdapterHandle
   /** Mint one scoped agent ctx under `key`, optionally parented under `parent`. */
@@ -117,6 +122,9 @@ export async function terminalHarness(options: TerminalHarnessOptions = {}): Pro
   const fibers: Fiber[] = []
   const scopes: Scope[] = []
   fibers.push(await ctx.plugin(RecordingShellExecutor))
+  // Constructed directly like the sandbox/subprocess fakes: the Service
+  // constructor registers `workspaceMcp` in this context.
+  const mcp = new RecordingWorkspaceMcp(ctx)
   const sandbox = options.sandbox === undefined ? new RecordingSandbox(ctx) : options.sandbox(ctx)
   const subprocess = new RecordingSubprocessRuntime(ctx)
   const fakeTerminals: FakeTerminalsService = {
@@ -141,6 +149,7 @@ export async function terminalHarness(options: TerminalHarnessOptions = {}): Pro
     subprocess,
     shell: (ctx.shell as unknown as { [symbols.original]?: RecordingShellExecutor })[symbols.original]!,
     fakeTerminals,
+    mcp,
     install: () => installWorkspaceEnvrcTerminalAdapter(ctx),
     scopedAgent(key, parent) {
       const scope = createScope(ctx, key, parent !== undefined ? { parent } : undefined)

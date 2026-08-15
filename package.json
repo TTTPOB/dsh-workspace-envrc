@@ -1,7 +1,7 @@
 {
   "name": "dsh-workspace-envrc",
   "version": "0.1.0",
-  "description": "Out-of-tree DSH bundle: applies the local machine's native direnv environment to explicitly Agent/workspace-owned Bash executions and persistent terminals. Depends on dsh-workspace-overlay; requires a host-installed direnv; never calls allow/deny or reads .envrc itself.",
+  "description": "Out-of-tree DSH bundle: applies the local machine's native direnv environment to explicitly Agent/workspace-owned Bash executions, persistent terminals, and local stdio workspace MCP rows. Depends on dsh-workspace-overlay; requires a host-installed direnv; never calls allow/deny or reads .envrc itself.",
   "keywords": [
     "deepseek-harness",
     "dsh-plugin",
@@ -35,6 +35,10 @@
     "./integration-plugin": {
       "types": "./dist/integration-plugin.d.ts",
       "default": "./dist/integration-plugin.js"
+    },
+    "./mcp-adapter": {
+      "types": "./dist/mcp-adapter.d.ts",
+      "default": "./dist/mcp-adapter.js"
     },
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./terminal-adapter": {

@@ -8,7 +8,7 @@ Publish an independent out-of-tree DSH bundle, `dsh-workspace-envrc`, that depen
 
 The plugin delegates discovery, `.envrc` evaluation, authorization hashes, `allow`/`deny`, stdlib behavior, and environment mutation to the installed `direnv` executable. It never parses or sources `.envrc`, never maintains an authorization database, never runs `direnv allow`, and never mutates the Harness process's `process.env`.
 
-V1 supports foreground Bash, background Bash jobs, and persistent terminal creation. Workspace MCP, LSP, subagent providers, and generic subprocess calls are out of scope.
+V1 supports foreground Bash, background Bash jobs, and persistent terminal creation. Workspace MCP, LSP, subagent providers, and generic subprocess calls are out of scope (superseded for workspace MCP by §11).
 
 ## 2. Package and dependency boundary
 
@@ -180,7 +180,7 @@ Agentless or unrelated subprocess terminal spawns outside the explicit `terminal
 - Applying environments to every `ctx.subprocess.spawn()` based on cwd.
 - Nested `.envrc` selection from per-command workdir in V1.
 - Automatically restarting a running background job or terminal after `.envrc` changes.
-- Workspace MCP, global MCP, LSP, filesystem helpers, generic subprocesses, or subagent providers.
+- Workspace MCP in V1 (superseded: §11 extends V1 to local stdio workspace MCP rows), global MCP, LSP, filesystem helpers, generic subprocesses, or subagent providers.
 - Windows support.
 
 ## 9. Implementation blocks and commits
@@ -234,7 +234,7 @@ Suggested commit: `docs: document workspace direnv integration` (the final commi
 
 ## 11. Workspace MCP extension
 
-Status: accepted extension plan; implementation follows the same delegated-block and main-agent review process as §9.
+Status: **source and deterministic unit tests implemented** (one block, committed by the main agent after review). The adapter, Config field, integration wiring, and the deterministic unit/child coverage described in §11.4 below are complete and verified (152 tests, typecheck, build, pack). The remaining §11.4 items — a real MCP SDK fixture under isolated native direnv allow/deny state, process replacement/tools/mask behavior, blocked reload recovery, final process cleanup through real workspace config hot reload, installed rc.6 isolated profile verification, and GitHub publication — are the next block.
 
 ### 11.1 Scope and ownership
 
@@ -246,7 +246,7 @@ Classification is authoritative and scope-based:
 - a scope key mapped by `ctx.workspaceCordis.workspaceForScope(key)`: workspace MCP row; use that canonical root as the direnv lookup directory;
 - any other scoped row: delegate unchanged and let the manager's own validation reject the invalid placement.
 
-The adapter never infers ownership from MCP `cwd`, `serverName`, headers, environment names, or a calling Agent. Streamable HTTP rows have no local child and pass through unchanged.
+The adapter never infers ownership from MCP `cwd`, `serverName`, headers, environment names, or a calling Agent. Streamable HTTP rows have no local child and pass through unchanged. A row context that is not a Cordis Context, and a missing raw config argument, delegate unchanged too.
 
 ### 11.2 Stdio projection
 
@@ -254,12 +254,12 @@ For a mapped workspace stdio row, replace only:
 
 ```text
 command + args
-  -> provider.wrapDeferredArgv(canonicalWorkspace, [command, ...args])
+  -> provider.wrapArgv(canonicalWorkspace, [command, ...args], {})
 ```
 
-The deferred wrapper captures the MCP SDK transport's final scrubbed-parent-plus-explicit environment immediately before direnv, evaluates the allowed workspace `.envrc`, removes every post-direnv `DSH_*`, restores the exact pre-direnv `DSH_*` snapshot, and execs the original MCP argv. `cwd`, explicit `env`, reconnect policy, startup policy, tool timeout, and every other config field remain unchanged. The manager still resolves workspace cwd and owns connection, process, tool, mask, retry, and teardown lifecycles.
+**Transport-environment correction (replaces the earlier deferred-capture wording):** the MCP SDK's stdio transport spawns the child with `{...scrubbedParentEnv(), ...config.env}` — the ambient `DSH_*` namespace is scrubbed from the parent environment BEFORE the child exists, so there is no Harness managed snapshot an MCP child could carry. The wrapped argv therefore carries an EMPTY managed snapshot (not the terminal's deferred capture, which exists to record a backend-built `SubprocessTerminalSpawnSpec.env` that the MCP path does not have). After native direnv evaluation the restoration shim deletes every `DSH_*` the environment still carries — including names a workspace config or an allowed `.envrc` explicitly exported; a workspace config must never be able to forge the Harness namespace — and restores nothing. Ordinary config `env` entries and `.envrc` exports follow native direnv semantics. `cwd`, explicit `env`, reconnect policy, startup policy, tool timeout, and every other config field remain unchanged by reference. The manager still resolves workspace cwd and owns connection, process, tool, mask, retry, and teardown lifecycles.
 
-Global MCP rows remain byte-for-byte unchanged. A global process cannot safely consume one caller workspace's environment because it is shared across workspaces.
+Global MCP rows remain byte-for-byte unchanged (raw config object identity passes through). A global process cannot safely consume one caller workspace's environment because it is shared across workspaces.
 
 ### 11.3 Reload semantics
 
@@ -267,14 +267,18 @@ The plugin adds no `.envrc` watcher. One workspace MCP process freezes its envir
 
 ### 11.4 Implementation and verification
 
-One implementation block, delegated to `opencode-go/deepseek-v4-flash` with max reasoning and no commits, will:
+This block (source + deterministic unit tests, no commits) delivered:
 
-- add `enableWorkspaceMcp: true` to Config, patch, getter, and docs;
-- implement a reversible, successor-safe Workspace MCP adapter and integrate it into the existing single wiring effect with partial-install rollback;
-- prove global/HTTP/unmapped pass-through and exact stdio field preservation;
+- `enableWorkspaceMcp: true` in Config, schema, defaults, patch, and a readonly `workspaceMcpEnabled` getter;
+- `src/mcp-adapter.ts`: a reversible, successor-safe, idempotent decorator on the concrete `workspaceMcp.activate`, with disabled/global/foreign/unmapped/malformed/HTTP passthrough (raw config identity and bytes untouched), mapped workspace stdio rows rewrapped with the empty-snapshot argv, exact receiver/promise/error passthrough, and the caller's raw config object never mutated;
+- integration-row extension: the single effect installs Bash → Terminal → MCP, partial-install rollback restores every adapter mounted by the failing call, and fiber unload reverse-disposes MCP → Terminal → Bash;
+- deterministic tests: workspace stdio exact-wrapper argv, global byte/object identity, HTTP identity, foreign-scoped passthrough with the manager error preserved, malformed passthrough, disable transparency, exact-workspace-scope requirement, two-workspace isolation, field/reference preservation, DSH_* config env untouched in the config while the child shim carries the empty snapshot, receiver/throw/promise passthrough, HMR descriptor restoration, double-install successor safety, complete integration order through the real Loader, and a fake-direnv child execution proving config ordinary env preservation, direnv override/additions visibility, DSH_* clearing, and original exit-status propagation.
+
+The NEXT block will:
+
 - run a real MCP SDK fixture under isolated native direnv allow/deny state;
 - prove process replacement, tools/mask behavior, blocked reload recovery, and final process cleanup through real workspace config hot reload;
-- update bilingual docs, package dependencies/exports, Loader composition, pack audit, installed rc.6 isolated profile verification, and GitHub publication.
+- update bilingual docs (final detailed MCP section), the pack audit, installed rc.6 isolated profile verification, and GitHub publication.
 
 Suggested commits:
 
@@ -284,4 +288,4 @@ test: cover workspace mcp direnv reload
 docs: document workspace mcp direnv
 ```
 
-Completion requires the prior 131 tests plus focused real MCP/direnv/reload tests, strict typecheck, build, pack, no process residue, isolated DSH rc.6 Loader activation, and a clean synchronized remote.
+Completion requires the prior 152 tests plus focused real MCP/direnv/reload tests, strict typecheck, build, pack, no process residue, isolated DSH rc.6 Loader activation, and a clean synchronized remote.
