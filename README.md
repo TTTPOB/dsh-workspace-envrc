@@ -8,7 +8,7 @@ DSH 树外独立 bundle：把本机原生 direnv 环境应用到显式归属于 
 
 ## 当前状态
 
-全部能力已实现并有测试覆盖：`workspaceEnvrc` provider core、可逆 Bash adapter、持久终端 adapter、workspace MCP adapter（§11，源码与确定性单测已完成；真实 MCP SDK fixture 与 workspace 配置热重载验证是下一块）、集成行，以及两条真实组合测试路径（真实 `direnv` 的 allow/deny/内容变更状态机、真实 Cordis Loader 组合内置 dist 的 provider/integration 行）。实现计划 [docs/implementation-plan.md](docs/implementation-plan.md) §9 状态为 **implemented and published**，§11 状态为 **source and deterministic unit tests implemented**。本 README 描述当前实现事实，不再按历史 Block 分期叙述。
+全部能力已实现并有测试覆盖（154 个测试全绿）：`workspaceEnvrc` provider core、可逆 Bash adapter、持久终端 adapter、workspace MCP adapter（§11 完整实现：源码、确定性单测、真实 MCP SDK fixture、真实 WorkspaceTree 热重载与原生 direnv 的组合验证）、集成行，以及三条真实组合测试路径（真实 `direnv` 的 allow/deny/内容变更状态机、真实 Cordis Loader 组合内置 dist 的 provider/integration 行、真实 MCP SDK stdio fixture + 原生 direnv + 顶层配置热重载的全生命周期）。实现计划 [docs/implementation-plan.md](docs/implementation-plan.md) §9 与 §11 状态均为 **implemented and published**。本 README 描述当前实现事实，不再按历史 Block 分期叙述。
 
 ## 依赖与安装
 
@@ -58,11 +58,12 @@ dsh --profile web --dump-config
 
 ### Workspace MCP（本地 stdio 行）
 
-- **scope 权威分类**：装饰公开的 `ctx.workspaceMcp.activate(rowCtx, rawConfig)`。`workspaceMcpEnabled` 为 false、`rowCtx` 不是 Cordis Context、缺 rawConfig、`scopeOf(rowCtx) === undefined`（global 行）、scope 未被 `workspaceCordis.workspaceForScope` 映射（preset/foreign 行，让 manager 自己拒绝）时一律原样透传，raw config 对象身份与字节不变；streamable-http 行（无本地子进程）与 malformed config 也原样透传，manager schema 产生原错误。
+- **scope 权威分类**：装饰公开的 `ctx.workspaceMcp.activate(rowCtx, rawConfig)`。分类只读 `scopeOf(rowCtx)` 并询问 `workspaceCordis.workspaceForScope`——绝不从行的 `cwd`/`serverName`/`env`、headers 或调用方 Agent 猜测归属。`workspaceMcpEnabled` 为 false、`rowCtx` 不是 Cordis Context、缺 rawConfig、`scopeOf(rowCtx) === undefined`（global 行）、scope 未被 `workspaceCordis.workspaceForScope` 映射（preset/foreign 行，让 manager 自己拒绝）时一律原样透传，raw config 对象身份与字节不变；streamable-http 行（无本地子进程）与 malformed config 也原样透传，manager schema 产生原错误。
 - **只替换 command/args**：mapped workspace 的合法 stdio 行（`transport === 'stdio'`、非空 string `command`、`string[]` `args`）替换为 `<direnv> exec <canonical-root> <managed-env-shim> <command> <args...>`；其余字段（`cwd`/`env`/reconnect/toolCallTimeoutMs 等）引用与值原样保留，调用方 raw config 对象不被修改。manager 仍负责 workspace cwd 解析与连接/进程/工具/mask/重试/拆除生命周期。
-- **空 managed snapshot（重要修正）**：MCP SDK stdio transport 的子进程环境是 `{...scrubbedParentEnv(), ...config.env}`——ambient `DSH_*` 在子进程存在前就被 scrub，**没有 Harness managed snapshot**。因此 wrapped argv 携带**空快照**（不是 terminal 的 deferred capture）：direnv 求值后 shim 删除环境里全部 `DSH_*`（包括 workspace config 或已 allow 的 `.envrc` 显式导出的——config 不得伪造 Harness namespace）并恢复为空；ordinary config env 与 `.envrc` 导出遵循原生 direnv 语义。
+- **空 managed snapshot（重要修正）**：MCP SDK stdio transport 的子进程环境是 `{...scrubbedParentEnv(), ...config.env}`——ambient `DSH_*` 在子进程存在前就被 scrub，**没有 Harness managed snapshot**。因此 wrapped argv 携带**空快照**（不是 terminal 的 deferred capture）：direnv 求值后 shim 删除环境里全部 `DSH_*`（包括 workspace config 或已 allow 的 `.envrc` 显式导出的——config 不得伪造 Harness namespace）并恢复为空；ordinary config env 与 `.envrc` 导出遵循原生 direnv 语义（`.envrc` 的同名导出可覆盖 config env）。
 - **MCP 行必须在精确 workspace scope**：只有 `scopeOf(rowCtx)` 自身被映射的行被包装；preset 子 scope 行（即使父链指向 workspace）透传并让 manager 拒绝。
 - **receiver/promise/error 原样**：精确 receiver 透传，manager 返回的 promise 与抛出的错误原样到达调用方。
+- **`enableWorkspaceMcp: false`**：MCP adapter 保持安装但永远透明——workspace stdio 行直接启动（**不经过 direnv**，即使 `.envrc` 处于 blocked 状态也照常启动），显式 config env 原样到达子进程（没有 shim 执行，config 里的 `DSH_*` 条目也不被删除）。
 
 ## 环境安全
 
@@ -82,7 +83,7 @@ dsh --profile web --dump-config
 - **并发**：不同 workspace 的 Agent / 终端创建各自独立 direnv 求值，互不串扰。
 - **组合要求**：唯一integration row同时注入`agents`、`shell`、`sandbox`、`subprocess`、`terminals`、`workspaceCordis`、`workspaceMcp`与`workspaceEnvrc`，保证terminal的direnv链不会落到late sandbox外；缺少任何一个service时整行保持pending，任何 adapter 都不会单独安装，即使 `enableTerminal: false` 或 `enableWorkspaceMcp: false`。
 - **不覆盖**：global MCP、LSP、subagent providers 与 generic `ctx.subprocess.spawn()` 明确不在范围（完整非目标清单见 [docs/implementation-plan.md](docs/implementation-plan.md) §8；Workspace MCP 已由 §11 覆盖）。**Windows 不支持**（激活即失败）。
-- **no watcher / no auto restart**：本 bundle 不 watch 任何文件（包括 `.envrc`——内容变更由原生 direnv 在下次执行时按 hash 拒绝）；`.envrc` 变化后不自动重启后台 job、已运行 terminal 或已运行的 workspace MCP 进程。MCP 进程环境在 spawn 时冻结；保存/触碰 workspace 顶层 `.dsh/cordis.yml` 走既有 WorkspaceTree 热重载：旧 MCP 进程被 dispose、新进程重新经过 direnv 启动（blocked 时保持可恢复语义，下次顶层配置事件重试）。
+- **no watcher / no auto restart**：本 bundle 不 watch 任何文件（包括 `.envrc`——内容变更由原生 direnv 在下次执行时按 hash 拒绝）。只改 `.envrc` 不触碰任何已运行进程：MCP 进程环境在 spawn 时冻结、pid 不变，后台 job 与已运行 terminal 也不自动重启；内容变更只让**未来的** spawn 被原生 direnv blocked，直到用户在 DSH 外重新 `direnv allow`。保存/触碰 workspace 顶层 `.dsh/cordis.yml` 走既有 WorkspaceTree 热重载：旧 MCP 进程退出，新进程重新经过 direnv 启动；若新启动被 blocked，按 overlay 既有失败语义 workspace 的工具/mask 暂时缺失、Agent 与 workspace lease 存活，下次顶层配置事件自动重试；用户 re-allow 后再次保存配置即得到 fresh pid/tools/mask。global 行不受 workspace reload 影响（进程与视图全程存活）；最终 release/dispose 退出全部 MCP 进程，无进程残留。
 
 ## Config
 
@@ -118,7 +119,7 @@ pnpm typecheck      # src + tests 严格类型检查
 pnpm build          # tsc -> dist
 ```
 
-测试从不读取、不写入真实用户 direnv 授权状态：`tests/direnv-native.spec.ts` 用真实 `direnv` 驱动完整 allow/deny/内容变更状态机与 deferred terminal wrapper，授权状态全部落在仓库内隔离的 `XDG_DATA_HOME`/`XDG_CONFIG_HOME`/`XDG_CACHE_HOME`/`HOME`（`.artifacts/` 下，gitignored）；shim 脚本与 wrapped command 用真实子进程在隔离显式环境中验证（不改 `process.env`）；`tests/mcp-adapter.spec.ts` 覆盖 MCP adapter 的 scope 分类/透传/生命周期，并用仓库内的 fake direnv 子进程执行 wrapped MCP argv（真实 MCP SDK fixture 属下一块）；后台路径用真实 AgentRegistry + ToolRuntime + tool-bash + jobs provider 验证；终端路径用真实 TerminalSessionService + terminal-bash + SandboxPolicyService 验证；`tests/loader-composition.spec.ts` 用真实 Cordis Loader 读取 test `cordis.yml`，组合内置 dist 的 provider/integration 行与真实 DSH services/overlay 依赖。
+全套 154 个测试全绿，且测试从不读取、不写入真实用户 direnv 授权状态：`tests/direnv-native.spec.ts` 用真实 `direnv` 驱动完整 allow/deny/内容变更状态机与 deferred terminal wrapper，授权状态全部落在仓库内隔离的 `XDG_DATA_HOME`/`XDG_CONFIG_HOME`/`XDG_CACHE_HOME`/`HOME`（`.artifacts/` 下，gitignored）；shim 脚本与 wrapped command 用真实子进程在隔离显式环境中验证（不改 `process.env`）；`tests/mcp-adapter.spec.ts` 确定性覆盖 MCP adapter 的 scope 分类/透传/生命周期，并用仓库内 fake direnv 子进程执行 wrapped MCP argv；`tests/mcp-live-direnv.spec.ts`（fixture：`tests/fixtures/mcp/fixture-server.mjs`，真实 `@modelcontextprotocol/sdk` `Server`/`StdioServerTransport`）在真实 overlay registry（真实 chokidar 热重载）+ 真实 `WorkspaceMcpManager`/`workspace-client` + 真实 provider/integration + 原生 direnv（仓库内隔离 XDG/HOME）下端到端证明：allowed `.envrc` 以原生优先级与 credential-shaped 可见性到达 MCP 子进程、空 managed snapshot（config/.envrc/ambient 的全部 `DSH_*` 缺失）、manager 解析的 workspace cwd、global 同 serverName 行 byte-for-byte 不包装且不受 workspace reload 影响、无 `.envrc` watcher（只改 `.envrc` 时 v1 进程冻结）、blocked 重载（旧进程退出、workspace 工具/mask 移除、lease 与 scope 存活、诊断无 canary）、re-allow 恢复（fresh pid + v2 环境 + mask 恢复）、最终 release/dispose 零进程残留（marker 对账）、以及 `enableWorkspaceMcp: false` 在 blocked `.envrc` 下不经 direnv 直接启动；后台路径用真实 AgentRegistry + ToolRuntime + tool-bash + jobs provider 验证；终端路径用真实 TerminalSessionService + terminal-bash + SandboxPolicyService 验证；`tests/loader-composition.spec.ts` 用真实 Cordis Loader 读取 test `cordis.yml`，组合内置 dist 的 provider/integration 行与真实 DSH services/overlay 依赖；built-entry smoke（`.artifacts/smoke-built.mjs`）以安装版 DSH rc.6 包解析 dist 的根/core/adapter/integration 导出并跑通真实 preflight。
 
 ## 安全与信任边界
 

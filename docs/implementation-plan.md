@@ -1,6 +1,6 @@
 # DSH workspace direnv integration plan
 
-Status: **implemented and published**. Every block in §9 and every completion criterion in §10 is complete. The READMEs describe the current behavior; this document retains the implementation decomposition and verified contract.
+Status: **implemented and published**. Every block in §9, every completion criterion in §10, and the §11 workspace MCP extension (source, deterministic unit tests, real MCP SDK + native direnv + WorkspaceTree hot-reload tests, and the final bilingual documentation and release audit) are complete. The READMEs describe the current behavior; this document retains the implementation decomposition and verified contract.
 
 ## 1. Objective
 
@@ -216,7 +216,7 @@ Suggested commit: `feat: apply direnv to workspace terminals`
 - Verify no write to the real direnv state, no user profile changes, no process residue, complete patch rows, package exports, pack contents, and isolated `DSH_HOME` installation.
 - Write Chinese and English READMEs with security/trust and execution-boundary details.
 
-Suggested commit: `docs: document workspace direnv integration` (the final commit history is `05fb756 docs: plan workspace direnv integration` → `bdc0739 feat: add workspace direnv provider` → `5feeca3 feat: apply direnv to workspace bash` → `7d17997 feat: apply direnv to workspace terminals` → `8140a26 test: cover native direnv integration`.)
+Suggested commit: `docs: document workspace direnv integration` (the final commit history is `05fb756 docs: plan workspace direnv integration` → `bdc0739 feat: add workspace direnv provider` → `5feeca3 feat: apply direnv to workspace bash` → `7d17997 feat: apply direnv to workspace terminals` → `8140a26 test: cover native direnv integration`; the visible history then continues with `d3889b7 fix: harden direnv shim compatibility` → `5d3ec36 chore: add repository metadata`, followed by the §11 commits listed at the end of §11.)
 
 ## 10. Completion criteria
 
@@ -234,7 +234,7 @@ Suggested commit: `docs: document workspace direnv integration` (the final commi
 
 ## 11. Workspace MCP extension
 
-Status: **source, deterministic unit tests, and real MCP SDK + native direnv + WorkspaceTree hot-reload tests implemented** (two blocks, committed by the main agent after review). The adapter, Config field, integration wiring, the deterministic unit/child coverage described in §11.4 below, and the live suite described in the new §11.4 items (real `@modelcontextprotocol/sdk` stdio fixture under repo-isolated native direnv allow/deny state; process replacement, tools/mask behavior, blocked reload recovery, and final process cleanup through real workspace config hot reload; global-row env isolation; `enableWorkspaceMcp: false` transparency) are complete and verified (154 tests, typecheck, build, pack). The remaining §11.4 items — installed rc.6 isolated profile verification, the final bilingual MCP documentation, and GitHub publication — are the next block.
+Status: **implemented and published** (two blocks, committed by the main agent after review; the final bilingual MCP documentation and release audit below). The adapter, Config field, integration wiring, the deterministic unit/child coverage described in §11.4 below, and the live suite described in the new §11.4 items (real `@modelcontextprotocol/sdk` stdio fixture under repo-isolated native direnv allow/deny state; process replacement, tools/mask behavior, blocked reload recovery, and final process cleanup through real workspace config hot reload; global-row env isolation; `enableWorkspaceMcp: false` transparency) are complete and verified (154 tests, strict typecheck, build, pack). The remaining §11.4 items — installed rc.6 isolated profile verification, the final bilingual MCP documentation, and GitHub publication — are also complete: the real Loader + built `dist` composition and the built-entry smoke run against the installed rc.6 packages, the READMEs document the MCP contract bilingually, and the repository is published at `https://github.com/TTTPOB/dsh-workspace-envrc` (verified live).
 
 ### 11.1 Scope and ownership
 
@@ -274,20 +274,21 @@ This block (source + deterministic unit tests, no commits) delivered:
 - integration-row extension: the single effect installs Bash → Terminal → MCP, partial-install rollback restores every adapter mounted by the failing call, and fiber unload reverse-disposes MCP → Terminal → Bash;
 - deterministic tests: workspace stdio exact-wrapper argv, global byte/object identity, HTTP identity, foreign-scoped passthrough with the manager error preserved, malformed passthrough, disable transparency, exact-workspace-scope requirement, two-workspace isolation, field/reference preservation, DSH_* config env untouched in the config while the child shim carries the empty snapshot, receiver/throw/promise passthrough, HMR descriptor restoration, double-install successor safety, complete integration order through the real Loader, and a fake-direnv child execution proving config ordinary env preservation, direnv override/additions visibility, DSH_* clearing, and original exit-status propagation.
 
-The NEXT block will:
+The second (live) block then delivered:
 
-- run a real MCP SDK fixture under isolated native direnv allow/deny state; *(implemented — see below)*
-- prove process replacement, tools/mask behavior, blocked reload recovery, and final process cleanup through real workspace config hot reload; *(implemented — see below)*
-- update bilingual docs (final detailed MCP section), the pack audit, installed rc.6 isolated profile verification, and GitHub publication.
+- a real MCP SDK fixture under isolated native direnv allow/deny state; *(implemented)*
+- process replacement, tools/mask behavior, blocked reload recovery, and final process cleanup through real workspace config hot reload; *(implemented)*
+- the final bilingual MCP documentation (this README + `docs/README.en.md`), the pack audit, installed rc.6 isolated profile verification (real Loader + built `dist`), and GitHub publication. *(implemented by this final audit)*
 
 The live block delivered `tests/mcp-live-direnv.spec.ts` plus the self-contained `tests/fixtures/mcp/fixture-server.mjs` (real `@modelcontextprotocol/sdk` `Server`/`StdioServerTransport`, `env_snapshot` + masked tool-list modes, start/exit marker): the real overlay registry with real chokidar hot reload, the real `WorkspaceMcpManager`/`workspace-client`, the real provider/integration, and real direnv under repo-internal isolated XDG/HOME prove an allowed workspace `.envrc` reaches the MCP child with native precedence and credential-shaped visibility, every DSH_* name absent (empty snapshot), manager-resolved cwd, an unwrapped same-serverName global row untouched by workspace reloads, no `.envrc` watcher (v1 process frozen on `.envrc`-only edits), blocked-start reload failure with old-process exit/tools/mask removal while lease and scope stay alive, canary-free blocked diagnostics, re-allow recovery with a fresh pid and v2 environment plus restored mask, final release/dispose with zero process residue, and `enableWorkspaceMcp: false` starting without direnv despite a blocked `.envrc`.
 
-Suggested commits:
+Commit history:
 
 ```text
-feat: apply direnv to workspace mcp
-test: cover workspace mcp direnv reload
-docs: document workspace mcp direnv
+a40aa71 docs: plan workspace mcp direnv
+019d63f feat: apply direnv to workspace mcp
+3ead00d test: cover workspace mcp direnv reload
+docs: document workspace mcp direnv   (this documentation commit)
 ```
 
-Completion requires the prior 152 tests plus the focused real MCP/direnv/reload tests (154 total), strict typecheck, build, pack, no process residue, isolated DSH rc.6 Loader activation, and a clean synchronized remote.
+Completion is verified: the prior 152 tests plus the focused real MCP/direnv/reload tests pass (154 total, `pnpm test`), strict typecheck (`pnpm typecheck`), build, and pack all pass, the live suite's marker reconciliation reports no process residue, the real Loader activates the built `dist` rows against the installed rc.6 packages, and GitHub publication is live.
