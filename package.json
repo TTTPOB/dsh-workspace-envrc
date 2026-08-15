@@ -1,7 +1,7 @@
 {
   "name": "dsh-workspace-envrc",
   "version": "0.1.0",
-  "description": "Out-of-tree DSH bundle: applies the local machine's native direnv environment to explicitly Agent/workspace-owned Bash executions and persistent terminals. Block A: package skeleton and provider core (Config, activation preflight, Agent->workspace resolution, direnv exec argv/command wrappers, managed DSH_* restoration shim); the reversible Bash/terminal adapters land in later blocks.",
+  "description": "Out-of-tree DSH bundle: applies the local machine's native direnv environment to explicitly Agent/workspace-owned Bash executions and persistent terminals. Block A ships the provider core (Config, activation preflight, Agent->workspace resolution, direnv exec argv/command wrappers, managed DSH_* restoration shim); Block B wires the reversible Bash adapter over ctx.shell.resolve (foreground and background jobs); the persistent-terminal adapter lands in a later block.",
   "type": "module",
   "main": "./dist/provider.js",
   "exports": {
@@ -12,6 +12,14 @@
     "./core": {
       "types": "./dist/core.d.ts",
       "default": "./dist/core.js"
+    },
+    "./bash-adapter": {
+      "types": "./dist/bash-adapter.d.ts",
+      "default": "./dist/bash-adapter.js"
+    },
+    "./integration-plugin": {
+      "types": "./dist/integration-plugin.d.ts",
+      "default": "./dist/integration-plugin.js"
     },
     "./cordis.patch.yml": "./cordis.patch.yml"
   },
@@ -39,6 +47,7 @@
     "@deepseek-ai/cordis": "^4.0.1",
     "@deepseek-ai/dsh-agent": "^0.1.0-rc.6",
     "@deepseek-ai/dsh-scope": "^0.1.0-rc.6",
+    "@deepseek-ai/dsh-shell": "^0.1.0-rc.6",
     "@deepseek-ai/dsh-timeout": "^0.1.0-rc.6",
     "dsh-workspace-overlay": "^0.1.0"
   },
@@ -48,8 +57,16 @@
   "devDependencies": {
     "@deepseek-ai/cordis": "4.0.1",
     "@deepseek-ai/dsh-agent": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-jobs": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-jobs-local": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-llm": "0.1.0-rc.6",
     "@deepseek-ai/dsh-scope": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-shell": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-shell-env": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-system-prompt": "0.1.0-rc.6",
     "@deepseek-ai/dsh-timeout": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-tool-bash": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-tools": "0.1.0-rc.6",
     "@types/node": "^24.0.0",
     "dsh-workspace-overlay": "file:../dsh-workspace-overlay",
     "typescript": "^5.9.0",

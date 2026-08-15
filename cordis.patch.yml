@@ -1,11 +1,17 @@
-# dsh-workspace-envrc bundle patch: register the workspaceEnvrc provider row.
+# dsh-workspace-envrc bundle patch: register the workspaceEnvrc provider and
+# the integration row that wires its execution adapters.
 #
-# Block A ships the provider core only. The row's config states the full
-# deployed values explicitly (a patch row replaces the target row's whole
-# config, never a deep merge) so `dsh --dump-config` shows every field even
-# though they equal the schema defaults. The reversible Bash adapter and the
-# persistent-terminal adapter are later blocks; their integration rows will be
-# inserted here once wired, keeping this Block A bundle loadable on its own.
+# Block A ships the provider core. Block B adds the reversible Bash adapter,
+# installed by the workspace-envrc-integration row below (the row injects
+# agents/shell/workspaceEnvrc, installs the adapter in an effect, and
+# reverse-disposes it on fiber unload). Block C will extend this same
+# integration installer with the persistent-terminal adapter; no additional
+# integration row will be added.
+#
+# The provider row's config states the full deployed values explicitly (a
+# patch row replaces the target row's whole config, never a deep merge) so
+# `dsh --dump-config` shows every field even though they equal the schema
+# defaults.
 - insert:
     - id: workspace-envrc
       name: dsh-workspace-envrc
@@ -15,3 +21,5 @@
         enableBash: true
         enableTerminal: true
         versionCheckTimeoutMs: 5000
+    - id: workspace-envrc-integration
+      name: dsh-workspace-envrc/integration-plugin

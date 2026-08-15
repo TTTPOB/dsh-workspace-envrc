@@ -2,12 +2,13 @@
  * `workspaceEnvrc` service provider: applies the local machine's native
  * direnv environment to explicitly Agent/workspace-owned executions.
  *
- * Block A implements the provider core only: strict Config validation, a
- * bounded activation preflight (native `direnv version` plus the shim shell
- * check, strictly awaited before this service is ready), Agent→workspace
- * resolution through scope ancestry, and the pure POSIX argv/command
- * wrappers. The reversible Bash adapter and the persistent-terminal adapter
- * are later blocks; until they land, this provider wraps nothing on its own.
+ * Block A implements the provider core: strict Config validation, a bounded
+ * activation preflight (native `direnv version` plus the shim shell check,
+ * strictly awaited before this service is ready), Agent→workspace resolution
+ * through scope ancestry, and the pure POSIX argv/command wrappers. Block B
+ * wires the reversible Bash adapter over `ctx.shell.resolve` in a separate
+ * module (`./bash-adapter.js`, installed by `./integration-plugin.js`); the
+ * persistent-terminal adapter is a later block.
  *
  * The plugin never calls `direnv allow`/`deny`/`permit`/`grant`/`edit`,
  * never parses or sources `.envrc`, never mutates `process.env`, and never
@@ -126,6 +127,23 @@ export default class WorkspaceEnvrc extends Service {
     } finally {
       this.activePreflight = undefined
     }
+  }
+
+  /**
+   * Read-only projection of the `enableBash` config. The Bash adapter checks
+   * this on every resolve: when false the adapter may stay installed but is
+   * permanently transparent. Never a mutable config handle.
+   */
+  get bashEnabled(): boolean {
+    return this.config.enableBash
+  }
+
+  /**
+   * Read-only projection of the `enableTerminal` config (Block C). Never a
+   * mutable config handle.
+   */
+  get terminalEnabled(): boolean {
+    return this.config.enableTerminal
   }
 
   /**
