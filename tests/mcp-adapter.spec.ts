@@ -177,7 +177,7 @@ function expectedWrappedArgv(
     // explicit and carries no Harness managed facts.
     '0',
     rawConfig.command as string,
-    ...(rawConfig.args as string[]),
+    ...((rawConfig.args as string[] | undefined) ?? []),
   ]
 }
 
@@ -203,6 +203,53 @@ describe('workspace MCP adapter classification', () => {
         expect([next.command, ...next.args]).toEqual(
           expectedWrappedArgv(defaultConfig.executable, canonical, rawConfig),
         )
+      } finally {
+        await row.dispose()
+      }
+    } finally {
+      await h.dispose()
+    }
+  })
+
+  it('wraps a programmatic stdio config whose args field is omitted using the manager default []', async () => {
+    const h = await mcpHarness()
+    try {
+      h.install()
+      const key: ScopeKey = {}
+      h.registry.set(key, '/workspaces/demo')
+      const row = h.scoped(key)
+      try {
+        const rawConfig = stdioRawConfig()
+        delete rawConfig.args
+        await h.ctx.workspaceMcp.activate(row.ctx, rawConfig)
+        const next = h.mcp.activations[0]!.rawConfig as { command: string; args: string[] }
+        expect([next.command, ...next.args]).toEqual(
+          expectedWrappedArgv(defaultConfig.executable, '/workspaces/demo', rawConfig),
+        )
+      } finally {
+        await row.dispose()
+      }
+    } finally {
+      await h.dispose()
+    }
+  })
+
+  it('preserves future positional arguments after rowCtx/rawConfig on wrapped calls', async () => {
+    const h = await mcpHarness()
+    try {
+      h.install()
+      const key: ScopeKey = {}
+      h.registry.set(key, '/workspaces/demo')
+      const row = h.scoped(key)
+      try {
+        const tail = { future: true }
+        await (h.ctx.workspaceMcp.activate as unknown as (...args: unknown[]) => Promise<void>)(
+          row.ctx,
+          stdioRawConfig(),
+          tail,
+          42,
+        )
+        expect(h.mcp.activations[0]!.extraArgs).toEqual([tail, 42])
       } finally {
         await row.dispose()
       }

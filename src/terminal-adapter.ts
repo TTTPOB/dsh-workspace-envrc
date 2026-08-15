@@ -129,7 +129,7 @@ export function installWorkspaceEnvrcTerminalAdapter(ctx: Context): WorkspaceEnv
       // A validation failure in the deferred wrapper propagates unchanged, so
       // a bad canonical workspace fails the spawn instead of running unwrapped.
       const wrappedArgv = ctx.workspaceEnvrc.wrapDeferredArgv(operation.canonical, argv)
-      const result = Reflect.apply(original, receiver, [wrappedArgv, policy])
+      const result = Reflect.apply(original, receiver, [wrappedArgv, policy, ...args.slice(2)])
       operation.wrapped = true
       return result
     })
@@ -157,7 +157,7 @@ export function installWorkspaceEnvrcTerminalAdapter(ctx: Context): WorkspaceEnv
         operation.wrapped = true
         // Only argv changes; env/cwd/rows/cols/graceMs/signal keep their exact
         // references, and the caller's spec object is never mutated.
-        return Reflect.apply(original, receiver, [{ ...spec, argv }])
+        return Reflect.apply(original, receiver, [{ ...spec, argv }, ...args.slice(1)])
       },
     )
   } catch (error) {

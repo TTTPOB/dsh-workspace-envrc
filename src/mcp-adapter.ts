@@ -21,7 +21,7 @@
  * - any other scoped row (preset or foreign scope) — delegate unchanged and
  *   let the manager's own validation reject the invalid placement;
  * - the raw config is a legal stdio shape (`transport === 'stdio'`, a
- *   non-empty string `command`, a `string[]` `args`) — replace only
+ *   non-empty string `command`, and omitted `args` or a `string[]`) — replace only
  *   `command` and `args` with the provider's wrapped argv; streamable HTTP
  *   rows (no local child) and malformed configs pass through unchanged, so
  *   the manager schema still produces its original error.
@@ -63,11 +63,11 @@ export interface WorkspaceEnvrcMcpAdapterHandle {
   dispose(): void
 }
 
-/** The legal stdio shape the adapter wraps; nothing else is touched. */
+/** The legal stdio shape the adapter wraps; omitted args use the manager default. */
 interface LegalStdioConfig {
   transport: 'stdio'
   command: string
-  args: string[]
+  args?: string[]
 }
 
 /** Narrow the raw config to the legal stdio shape without validating anything else. */
@@ -76,6 +76,7 @@ function isLegalStdioConfig(rawConfig: unknown): rawConfig is LegalStdioConfig &
   const record = rawConfig as Record<string, unknown>
   if (record.transport !== 'stdio') return false
   if (typeof record.command !== 'string' || record.command.length === 0) return false
+  if (record.args === undefined) return true
   if (!Array.isArray(record.args)) return false
   return record.args.every((arg) => typeof arg === 'string')
 }
@@ -132,13 +133,13 @@ export function installWorkspaceEnvrcMcpAdapter(ctx: Context): WorkspaceEnvrcMcp
       // ordinary config env / .envrc exports follow native direnv semantics.
       const wrappedArgv = ctx.workspaceEnvrc.wrapArgv(
         canonical,
-        [rawConfig.command, ...rawConfig.args],
+        [rawConfig.command, ...(rawConfig.args ?? [])],
         {},
       )
       // Only command/args change; every other field keeps its exact reference
       // and value, and the caller's raw config object is never mutated.
       const nextConfig = { ...rawConfig, command: wrappedArgv[0]!, args: wrappedArgv.slice(1) }
-      return Reflect.apply(original, receiver, [rowCtx, nextConfig])
+      return Reflect.apply(original, receiver, [rowCtx, nextConfig, ...args.slice(2)])
     },
   )
   let disposed = false

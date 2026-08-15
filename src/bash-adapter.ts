@@ -70,7 +70,7 @@ export function installWorkspaceEnvrcBashAdapter(ctx: Context): WorkspaceEnvrcBa
     const command = ctx.workspaceEnvrc.wrapCommand(canonicalWorkspace, request.command, request.dshEnv ?? {})
     // Only `command` changes; every other field keeps its exact reference and
     // value, and the caller's request object is never mutated.
-    return Reflect.apply(original, receiver, [{ ...request, command }])
+    return Reflect.apply(original, receiver, [{ ...request, command }, ...args.slice(1)])
   })
   let disposed = false
   return {

@@ -208,6 +208,8 @@ export interface RecordedMcpActivation {
   rawConfig: unknown
   /** The exact receiver the call came in on (the traceable service proxy). */
   receiver: unknown
+  /** Any future positional arguments after rowCtx/rawConfig. */
+  extraArgs: unknown[]
 }
 
 /**
@@ -230,8 +232,8 @@ export class RecordingWorkspaceMcp extends Service {
     super(ctx, 'workspaceMcp')
   }
 
-  activate(rowCtx: unknown, rawConfig: unknown): Promise<void> {
-    this.activations.push({ rowCtx, rawConfig, receiver: this })
+  activate(rowCtx: unknown, rawConfig: unknown, ...extraArgs: unknown[]): Promise<void> {
+    this.activations.push({ rowCtx, rawConfig, receiver: this, extraArgs })
     if (this.throwing !== undefined) {
       throw this.throwing
     }
