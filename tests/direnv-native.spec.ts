@@ -2,8 +2,8 @@
  * REAL native direnv state machine tests (Block D).
  *
  * These tests execute the actual `/usr/bin/direnv` (v2.32.1 on the dev
- * machine) through the REAL `workspaceEnvrc` provider projections
- * (`wrapCommand` / `buildDeferredManagedExecArgv`) as real child processes.
+ * machine) through the REAL `workspaceEnvrc` provider `wrapCommand`
+ * projection as real child processes.
  * Nothing is mocked:
  *
  * - the provider activates through the real class-plugin path with the real
@@ -32,9 +32,6 @@ import { fileURLToPath } from 'node:url'
 import { Context } from '@deepseek-ai/cordis'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
-  DEFERRED_ENV_SHIM_LABEL,
-  MANAGED_ENV_SHIM_LABEL,
-  buildDeferredManagedExecArgv,
   defaultConfig,
   type PreflightExit,
   type PreflightSpawn,
@@ -174,8 +171,7 @@ async function makeHarness(): Promise<NativeHarness> {
   const direnv = direnvPath
   const config: WorkspaceEnvrcConfig = { ...defaultConfig, executable: direnv }
   const ctx = new Context()
-  // The provider row injects these; the projections under test never read
-  // them (wrapCommand/wrapDeferredArgv need no Agent/workspace mapping).
+  // The provider row injects these; wrapCommand itself needs no Agent mapping.
   ctx.provide('agents', {})
   ctx.provide('workspaceCordis', {})
   const RuntimeProvider = class extends WorkspaceEnvrc {
@@ -433,89 +429,6 @@ describe('real direnv native state machine (isolated repo-internal XDG)', () => 
     }
   })
 
-  it('real terminal deferred wrapper: managed DSH facts preserved, forged DSH cleared, ordinary vars visible; content change blocks', async () => {
-    const h = await makeHarness()
-    try {
-      const ws = join(h.root, 'ws')
-      await mkdir(ws)
-      const envrc = join(ws, '.envrc')
-      const canary = 'cred-canary-5f'
-      await writeEnvrc(h, envrc, [
-        'export TERM_MARKER=deferred-ok',
-        `export FAKE_CRED=${canary}`,
-        'export DSH_FORGED=forged-value',
-      ].join('\n'))
-      expect((await runDirenv(h, ['allow', envrc])).code).toBe(0)
-
-      // The exact argv the terminal adapter would commit (Block C deferred
-      // chain), with the final spec-style environment a subprocess provider
-      // would merge: managed DSH facts, an ambient DSH_DIRTY, forged
-      // BASH_ENV/ENV, and the ordinary vars.
-      const argv = buildDeferredManagedExecArgv({
-        executable: h.direnv,
-        canonicalWorkspace: ws,
-        shimShell: '/bin/bash',
-        captureLabel: DEFERRED_ENV_SHIM_LABEL,
-        restoreLabel: MANAGED_ENV_SHIM_LABEL,
-        originalArgv: [
-          '/bin/bash',
-          '-c',
-          [
-            'printf "SID=%s|PTY=%s|SHELL=%s|FORGED=%s|DIRTY=%s|MARKER=%s|CRED=%s|BASHENV=%s\\n"',
-            '"${DSH_SESSION_ID-}"',
-            '"${DSH_PTY_SESSION_ID-}"',
-            '"${DSH_SHELL-}"',
-            '"${DSH_FORGED-unset}"',
-            '"${DSH_DIRTY-unset}"',
-            '"$TERM_MARKER"',
-            '"$FAKE_CRED"',
-            '"${BASH_ENV-unset}"',
-          ].join(' '),
-        ],
-      })
-      const env = h.env({
-        DSH_SESSION_ID: 'sess-deferred-7',
-        DSH_PTY_SESSION_ID: 'pty-deferred-7',
-        DSH_SHELL: '1',
-        // A managed DSH_* fact the final spec env carries beyond the backend
-        // trio: the deferred capture treats everything in the spawned env as
-        // the snapshot, so it survives direnv exactly like the trio.
-        DSH_DIRTY: 'ambient-dirty',
-        BASH_ENV: '/nonexistent-evil-bashenv-xyz',
-        ENV: '/nonexistent-evil-env-xyz',
-      })
-      const ok = await runChild([...argv], { env })
-      expect(ok.timedOut).toBe(false)
-      expect(ok.code).toBe(0)
-      expect(ok.stdout).toContain('SID=sess-deferred-7')
-      expect(ok.stdout).toContain('PTY=pty-deferred-7')
-      expect(ok.stdout).toContain('SHELL=1')
-      // direnv-forged DSH_* facts are cleared; captured facts are restored.
-      expect(ok.stdout).toContain('FORGED=unset')
-      expect(ok.stdout).toContain('DIRTY=ambient-dirty')
-      expect(ok.stdout).toContain('MARKER=deferred-ok')
-      expect(ok.stdout).toContain(`CRED=${canary}`)
-      expect(ok.stdout).toContain('BASHENV=unset')
-      // A leaked BASH_ENV would make bash try to source the evil file.
-      expect(ok.stderr).not.toContain('evil')
-
-      // Content change invalidates the native hash for the deferred chain
-      // too: blocked with the original program never running.
-      await writeEnvrc(h, envrc, [
-        'export TERM_MARKER=changed',
-        `export FAKE_CRED=${canary}`,
-      ].join('\n'))
-      const blocked = await runChild([...argv], { env })
-      expect(blocked.timedOut).toBe(false)
-      expect(blocked.code).not.toBe(0)
-      expect(blocked.stdout).toBe('')
-      expect(blocked.stderr).toMatch(/blocked|denied/i)
-      expect(blocked.stderr).not.toContain(canary)
-    } finally {
-      await h.cleanup()
-    }
-  })
-
   it('activation preflight failures carry only stage and identity, never environment or secret values', async () => {
     const h = await makeHarness()
     try {
@@ -553,7 +466,6 @@ describe('real direnv native state machine (isolated repo-internal XDG)', () => 
       // preflight (real `direnv version` + real shim-shell child under the
       // isolated env); reaching this point proves both children exited 0.
       expect(h.provider.bashEnabled).toBe(true)
-      expect(h.provider.terminalEnabled).toBe(true)
       expect(h.provider.wrapCommand(join(h.root, 'ws'), 'true').startsWith(`exec '${h.direnv}'`)).toBe(true)
     } finally {
       await h.cleanup()

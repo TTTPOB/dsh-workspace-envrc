@@ -14,9 +14,6 @@ import { defaultConfig, type WorkspaceEnvrcConfig } from '../src/core.js'
 import * as Integration from '../src/integration-plugin.js'
 import WorkspaceEnvrc from '../src/provider.js'
 import {
-  inertSandbox,
-  inertSubprocess,
-  inertTerminals,
   inertWorkspaceMcp,
   mutableWorkspaceRegistry,
   okSpawn,
@@ -61,11 +58,8 @@ async function setup(config: WorkspaceEnvrcConfig = defaultConfig): Promise<Harn
   fibers.push(await ctx.plugin(RecordingShellExecutor))
   fibers.push(await ctx.plugin(ToolBash))
   ctx.provide('workspaceCordis', registry)
-  // The integration row injects these; the Bash path never invokes
-  // them, so inert services satisfy activation without terminal/MCP residue.
-  ctx.provide('terminals', inertTerminals())
-  ctx.provide('sandbox', inertSandbox())
-  ctx.provide('subprocess', inertSubprocess())
+  // The integration row injects the MCP manager; this Bash harness never
+  // activates an MCP row.
   ctx.provide('workspaceMcp', inertWorkspaceMcp())
   const RuntimeProvider = class extends WorkspaceEnvrc {
     constructor(applyCtx: Context) {

@@ -1,7 +1,7 @@
 {
   "name": "dsh-workspace-envrc",
   "version": "0.1.0",
-  "description": "Out-of-tree DSH bundle: applies the local machine's native direnv environment to explicitly Agent/workspace-owned Bash executions, persistent terminals, and local stdio workspace MCP rows. Depends on dsh-workspace-overlay; requires a host-installed direnv; never calls allow/deny or reads .envrc itself.",
+  "description": "Out-of-tree DSH bundle: applies the local machine's native direnv environment to explicitly Agent/workspace-owned Bash executions and local stdio workspace MCP rows. Depends on dsh-workspace-overlay; requires a host-installed direnv; never calls allow/deny or reads .envrc itself.",
   "keywords": [
     "deepseek-harness",
     "dsh-plugin",
@@ -40,11 +40,7 @@
       "types": "./dist/mcp-adapter.d.ts",
       "default": "./dist/mcp-adapter.js"
     },
-    "./cordis.patch.yml": "./cordis.patch.yml",
-    "./terminal-adapter": {
-      "types": "./dist/terminal-adapter.d.ts",
-      "default": "./dist/terminal-adapter.js"
-    }
+    "./cordis.patch.yml": "./cordis.patch.yml"
   },
   "files": [
     "dist",
@@ -72,10 +68,7 @@
     "@deepseek-ai/dsh-scope": "^0.1.0-rc.6",
     "@deepseek-ai/dsh-shell": "^0.1.0-rc.6",
     "@deepseek-ai/dsh-timeout": "^0.1.0-rc.6",
-    "dsh-workspace-overlay": "^0.1.0",
-    "@deepseek-ai/dsh-sandbox": "^0.1.0-rc.6",
-    "@deepseek-ai/dsh-subprocess": "^0.1.0-rc.6",
-    "@deepseek-ai/dsh-terminal": "^0.1.0-rc.6"
+    "dsh-workspace-overlay": "^0.1.0"
   },
   "dependencies": {
     "@deepseek-ai/schemastery": "^3.18.1"
@@ -88,15 +81,10 @@
     "@deepseek-ai/dsh-jobs": "0.1.0-rc.6",
     "@deepseek-ai/dsh-jobs-local": "0.1.0-rc.6",
     "@deepseek-ai/dsh-llm": "0.1.0-rc.6",
-    "@deepseek-ai/dsh-sandbox": "0.1.0-rc.6",
-    "@deepseek-ai/dsh-sandbox-policy": "0.1.0-rc.6",
     "@deepseek-ai/dsh-scope": "0.1.0-rc.6",
     "@deepseek-ai/dsh-shell": "0.1.0-rc.6",
     "@deepseek-ai/dsh-shell-env": "0.1.0-rc.6",
-    "@deepseek-ai/dsh-subprocess": "0.1.0-rc.6",
     "@deepseek-ai/dsh-system-prompt": "0.1.0-rc.6",
-    "@deepseek-ai/dsh-terminal": "0.1.0-rc.6",
-    "@deepseek-ai/dsh-terminal-bash": "0.1.0-rc.6",
     "@deepseek-ai/dsh-timeout": "0.1.0-rc.6",
     "@deepseek-ai/dsh-tool-bash": "0.1.0-rc.6",
     "@deepseek-ai/dsh-tools": "0.1.0-rc.6",

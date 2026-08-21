@@ -77,7 +77,7 @@ import * as workspaceClient from 'dsh-workspace-overlay/mcp/workspace-client'
 import { defaultConfig as envrcDefaultConfig, type PreflightSpawn, type WorkspaceEnvrcConfig } from '../src/core.js'
 import * as Integration from '../src/integration-plugin.js'
 import WorkspaceEnvrc from '../src/provider.js'
-import { RecordingSandbox, RecordingShellExecutor, RecordingSubprocessRuntime } from './helpers.js'
+import { RecordingShellExecutor } from './helpers.js'
 
 /** The repository root: every temp dir and marker below lives inside the repo. */
 const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url))
@@ -289,9 +289,9 @@ afterEach(async () => {
 /**
  * Boot a real composition: Loader + Include, SystemPrompt + ToolRuntime, the
  * REAL overlay registry (real chokidar watchers, real debounce), the REAL
- * workspace MCP manager, the REAL agent registry, recording
- * shell/sandbox/subprocess/terminals providers, the REAL workspaceEnvrc
- * provider (isolated preflight children) and the REAL integration row.
+ * workspace MCP manager, the REAL agent registry, a recording shell provider,
+ * the REAL workspaceEnvrc provider (isolated preflight children), and the REAL
+ * integration row.
  */
 async function makeCase(options: { enableWorkspaceMcp?: boolean } = {}): Promise<LiveCase> {
   const enableWorkspaceMcp = options.enableWorkspaceMcp ?? true
@@ -317,15 +317,6 @@ async function makeCase(options: { enableWorkspaceMcp?: boolean } = {}): Promise
   await ctx.plugin(WorkspaceMcpManager)
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(RecordingShellExecutor)
-  new RecordingSandbox(ctx)
-  new RecordingSubprocessRuntime(ctx)
-  // The integration row only requires `terminals` to exist; this suite never
-  // spawns a terminal.
-  ctx.provide('terminals', {
-    async spawn() {
-      throw new Error('unused: terminals.spawn in the MCP live suite')
-    },
-  })
   const providerConfig: WorkspaceEnvrcConfig = {
     ...envrcDefaultConfig,
     executable: direnvPath,

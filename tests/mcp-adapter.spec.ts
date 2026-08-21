@@ -43,14 +43,12 @@ import {
   installWorkspaceEnvrcMcpAdapter,
   type WorkspaceEnvrcMcpAdapterHandle,
 } from '../src/mcp-adapter.js'
-import * as Integration from '../src/integration-plugin.js'
 import WorkspaceEnvrc from '../src/provider.js'
 import {
   RecordingWorkspaceMcp,
   mutableWorkspaceRegistry,
   okSpawn,
 } from './helpers.js'
-import { terminalHarness } from './terminal-harness.js'
 
 /** The repository root: every temp dir and fake binary lives inside the repo. */
 const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url))
@@ -717,53 +715,6 @@ describe('workspace MCP adapter lifecycle', () => {
     }
   })
 
-  it('complete integration order: the real integration row installs and dispose restores activate', async () => {
-    const h = await mcpHarness()
-    try {
-      const key: ScopeKey = {}
-      h.registry.set(key, '/workspaces/demo')
-      const row = h.scoped(key)
-      try {
-        // Nothing installed yet: identity passthrough.
-        const plain = stdioRawConfig({ serverName: 'plain' })
-        await h.ctx.workspaceMcp.activate(row.ctx, plain)
-        expect(h.mcp.activations[0]!.rawConfig).toBe(plain)
-
-        // Mount the REAL integration row through the full harness (it carries
-        // every service the row injects, including the recording manager).
-        const full = await terminalHarness()
-        try {
-          full.registry.set(key, '/workspaces/demo')
-          const fullRow = full.scopedAgent(key).agent.ctx
-          let fiber: Fiber | undefined
-          try {
-            fiber = await full.ctx.plugin(Integration)
-            const rawConfig = stdioRawConfig({ serverName: 'wrapped' })
-            await full.ctx.workspaceMcp.activate(fullRow, rawConfig)
-            const next = full.mcp.activations.at(-1)!.rawConfig as { command: string; args: string[] }
-            expect(next).not.toBe(rawConfig)
-            expect([next.command, ...next.args]).toEqual(
-              expectedWrappedArgv(defaultConfig.executable, '/workspaces/demo', rawConfig),
-            )
-
-            // Disposing the integration fiber restores activate: identity
-            // passthrough again, services stay composed.
-            await fiber.dispose()
-            await full.ctx.workspaceMcp.activate(fullRow, rawConfig)
-            expect(full.mcp.activations.at(-1)!.rawConfig).toBe(rawConfig)
-          } finally {
-            await fiber?.dispose()
-          }
-        } finally {
-          await full.dispose()
-        }
-      } finally {
-        await row.dispose()
-      }
-    } finally {
-      await h.dispose()
-    }
-  })
 })
 
 // ---- Fake direnv child execution (deterministic; the real allow/deny state

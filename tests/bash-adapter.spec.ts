@@ -7,9 +7,6 @@ import { defaultConfig, type WorkspaceEnvrcConfig } from '../src/core.js'
 import * as Integration from '../src/integration-plugin.js'
 import WorkspaceEnvrc from '../src/provider.js'
 import {
-  inertSandbox,
-  inertSubprocess,
-  inertTerminals,
   inertWorkspaceMcp,
   mutableWorkspaceRegistry,
   okSpawn,
@@ -45,11 +42,6 @@ async function harness(config: WorkspaceEnvrcConfig = defaultConfig): Promise<Ha
   const registry = mutableWorkspaceRegistry()
   ctx.provide('agents', agents)
   ctx.provide('workspaceCordis', registry)
-  // The Block C integration row injects these; the Bash tests never invoke
-  // them, so inert services satisfy activation without spawning anything.
-  ctx.provide('terminals', inertTerminals())
-  ctx.provide('sandbox', inertSandbox())
-  ctx.provide('subprocess', inertSubprocess())
   // The integration row injects the MCP manager; the Bash tests never
   // activate an MCP row, so an inert service satisfies activation.
   ctx.provide('workspaceMcp', inertWorkspaceMcp())
@@ -424,22 +416,15 @@ describe('workspace-envrc-integration plugin', () => {
 })
 
 describe('provider feature getters', () => {
-  it('exposes readonly bashEnabled/terminalEnabled projections of the config', async () => {
-    const h = await harness({ ...defaultConfig, enableBash: false, enableTerminal: false })
+  it('exposes a readonly bashEnabled projection of the config', async () => {
+    const h = await harness({ ...defaultConfig, enableBash: false })
     try {
       const service = h.ctx.workspaceEnvrc
       expect(service.bashEnabled).toBe(false)
-      expect(service.terminalEnabled).toBe(false)
-      // Accessor-only: a getter without a setter on the class prototype, no
-      // mutable own slot on the instance — never a mutable config handle.
       const bash = Object.getOwnPropertyDescriptor(WorkspaceEnvrc.prototype, 'bashEnabled')
       expect(bash?.get).toBeTypeOf('function')
       expect(bash?.set).toBeUndefined()
-      const terminal = Object.getOwnPropertyDescriptor(WorkspaceEnvrc.prototype, 'terminalEnabled')
-      expect(terminal?.get).toBeTypeOf('function')
-      expect(terminal?.set).toBeUndefined()
       expect(Object.prototype.hasOwnProperty.call(service, 'bashEnabled')).toBe(false)
-      expect(Object.prototype.hasOwnProperty.call(service, 'terminalEnabled')).toBe(false)
     } finally {
       await h.dispose()
     }
@@ -449,7 +434,6 @@ describe('provider feature getters', () => {
     const h = await harness()
     try {
       expect(h.ctx.workspaceEnvrc.bashEnabled).toBe(true)
-      expect(h.ctx.workspaceEnvrc.terminalEnabled).toBe(true)
     } finally {
       await h.dispose()
     }

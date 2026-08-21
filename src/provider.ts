@@ -5,13 +5,11 @@
  * The provider owns strict Config validation, a bounded activation preflight,
  * Agent-to-workspace resolution through scope ancestry, and the pure POSIX
  * argv/command wrappers. `./integration-plugin.js` installs the reversible
- * Bash, persistent-terminal, and workspace MCP adapters that consume these
- * projections.
+ * Bash and workspace MCP adapters that consume these projections.
  *
  * The plugin never calls `direnv allow`/`deny`/`permit`/`grant`/`edit`,
- * never parses or sources `.envrc`, never mutates `process.env`, and never
- * uses `ctx.subprocess` (the adapters' own execution seam, to avoid
- * recursion); activation checks run through plain node child processes.
+ * never parses or sources `.envrc`, and never mutates `process.env`;
+ * activation checks run through plain node child processes.
  *
  * @module dsh-workspace-envrc
  */
@@ -21,12 +19,10 @@ import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import z from '@deepseek-ai/schemastery'
 import type WorkspaceRegistry from 'dsh-workspace-overlay'
 import {
-  DEFERRED_ENV_SHIM_LABEL,
   MANAGED_ENV_SHIM_LABEL,
   MANAGED_ENV_SHIM_SCRIPT,
   assertPosixPlatform,
   assertWorkspaceEnvrcConfig,
-  buildDeferredManagedExecArgv,
   buildExecArgv,
   defaultConfig,
   resolveAgentWorkspace,
@@ -65,7 +61,6 @@ export default class WorkspaceEnvrc extends Service {
     executable: z.string().default(defaultConfig.executable),
     shimShell: z.string().default(defaultConfig.shimShell),
     enableBash: z.boolean().default(defaultConfig.enableBash),
-    enableTerminal: z.boolean().default(defaultConfig.enableTerminal),
     enableWorkspaceMcp: z.boolean().default(defaultConfig.enableWorkspaceMcp),
     versionCheckTimeoutMs: z
       .natural()
@@ -154,14 +149,6 @@ export default class WorkspaceEnvrc extends Service {
   }
 
   /**
-   * Read-only projection of the `enableTerminal` config. Never a
-   * mutable config handle.
-   */
-  get terminalEnabled(): boolean {
-    return this.config.enableTerminal
-  }
-
-  /**
    * Read-only projection of the `enableWorkspaceMcp` config. The MCP
    * adapter checks this on every `workspaceMcp.activate` call: when false
    * the adapter may stay installed but is permanently transparent. Never a
@@ -232,25 +219,5 @@ export default class WorkspaceEnvrc extends Service {
       },
       originalCommand,
     )
-  }
-
-  /**
-   * Wrap a terminal's original argv as the deferred managed-env chain (Block
-   * C). Unlike {@link wrapArgv}, no managed DSH_* snapshot is supplied: the
-   * backend builds the final `SubprocessTerminalSpawnSpec.env` only after the
-   * `ctx.sandbox.confine(argv)` commit seam, so the outer capture shim
-   * records the exact DSH_* facts from the spawned process environment right
-   * before direnv, and the post-direnv restoration shim reinstates exactly
-   * those pairs. `BASH_ENV`/`ENV` are stripped from the whole chain.
-   */
-  wrapDeferredArgv(canonicalWorkspace: string, originalArgv: readonly string[]): readonly string[] {
-    return buildDeferredManagedExecArgv({
-      executable: this.config.executable,
-      canonicalWorkspace,
-      shimShell: this.config.shimShell,
-      captureLabel: DEFERRED_ENV_SHIM_LABEL,
-      restoreLabel: MANAGED_ENV_SHIM_LABEL,
-      originalArgv,
-    })
   }
 }

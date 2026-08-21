@@ -30,8 +30,8 @@
  * with `{...scrubbedParentEnv(), ...config.env}` — the ambient `DSH_*`
  * namespace is scrubbed before the child exists and there is NO Harness
  * managed snapshot for an MCP child. The wrapped argv therefore carries an
- * EMPTY managed snapshot (`wrapArgv(canonical, [command, ...args], {})`, not
- * the terminal deferred capture): after native direnv evaluation the
+ * EMPTY managed snapshot (`wrapArgv(canonical, [command, ...args], {})`):
+ * after native direnv evaluation the
  * restoration shim deletes every `DSH_*` the environment still carries
  * (including names a workspace config or an allowed `.envrc` explicitly
  * exported — DSH must never be able to forge the Harness namespace) and

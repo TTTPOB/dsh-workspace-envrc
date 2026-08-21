@@ -4,8 +4,6 @@ import { createScope } from '@deepseek-ai/dsh-scope'
 import { describe, expect, it, vi } from 'vitest'
 import type WorkspaceRegistry from 'dsh-workspace-overlay'
 import {
-  DEFERRED_ENV_CAPTURE_SCRIPT,
-  DEFERRED_ENV_SHIM_LABEL,
   MANAGED_ENV_SHIM_LABEL,
   MANAGED_ENV_SHIM_SCRIPT,
   type PreflightChild,
@@ -182,32 +180,6 @@ describe('WorkspaceEnvrc projections', () => {
       '-c',
       'echo hi',
     ])
-  })
-
-  it('wrapDeferredArgv builds the deferred capture chain from the config', async () => {
-    const ctx = new Context()
-    await activate(ctx, { ...defaultConfig, executable: '/usr/local/bin/direnv' }, { spawn: okSpawn() })
-    expect(ctx.workspaceEnvrc.wrapDeferredArgv('/workspaces/demo', ['/bin/bash', '-i'])).toEqual([
-      'env',
-      '-u',
-      'BASH_ENV',
-      '-u',
-      'ENV',
-      '/bin/bash',
-      '--noprofile',
-      '--norc',
-      '-c',
-      DEFERRED_ENV_CAPTURE_SCRIPT,
-      DEFERRED_ENV_SHIM_LABEL,
-      '/bin/bash',
-      '/usr/local/bin/direnv',
-      '/workspaces/demo',
-      MANAGED_ENV_SHIM_LABEL,
-      '/bin/bash',
-      '-i',
-    ])
-    // The restoration label stays the shared managed-env shim label.
-    expect(ctx.workspaceEnvrc.wrapDeferredArgv('/workspaces/demo', ['true'])).toContain(MANAGED_ENV_SHIM_LABEL)
   })
 
   it('wrapCommand produces the quoted exec command from the config', async () => {
