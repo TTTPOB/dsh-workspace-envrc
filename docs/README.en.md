@@ -4,15 +4,15 @@
 
 An out-of-tree DSH bundle that applies the local machine's native direnv environment to explicitly Agent/workspace-owned Bash executions (foreground and background) and local stdio workspace MCP rows. It delegates `.envrc` discovery, evaluation, authorization hashes, allow/deny state, stdlib behavior, and environment changes to the installed `direnv` executable. It does not parse or source `.envrc`, maintain authorization state, call `direnv allow`/`permit`/`grant`/`edit`, use `direnv export`, watch or cache `.envrc`, mutate the Harness `process.env`, or expose an allow/deny tool to models.
 
-The target DSH version is `0.1.0-rc.6`. The bundle depends on `dsh-workspace-overlay` for canonical workspace scopes, the workspace-aware MCP manager, and reversible method wrappers.
+The development and release baseline is DSH service packages `0.1.5-rc.2`, Cordis `4.0.2`, and overlay `0.1.1`. The bundle depends on `dsh-workspace-overlay` for canonical workspace scopes, the workspace-aware MCP manager, and reversible method wrappers. Shared peers must resolve to the same module instances as the Host.
 
 ## Installation
 
 Install the overlay first, then this bundle. The host must already provide `direnv`:
 
 ```sh
-dsh plugin --profile web add /path/to/dsh-workspace-overlay
-dsh plugin --profile web add /path/to/dsh-workspace-envrc
+dsh plugin --profile web add https://github.com/TTTPOB/dsh-workspace-overlay/releases/download/v0.1.1/dsh-workspace-overlay-0.1.1.tgz
+dsh plugin --profile web add https://github.com/TTTPOB/dsh-workspace-envrc/releases/download/v0.1.1/dsh-workspace-envrc-0.1.1.tgz
 dsh --profile web --dump-config
 ```
 

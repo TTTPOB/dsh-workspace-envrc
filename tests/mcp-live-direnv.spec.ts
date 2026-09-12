@@ -62,7 +62,7 @@ import { Context, LoggerService } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import Include from '@deepseek-ai/cordis-plugin-include'
 import { AgentRegistry } from '@deepseek-ai/dsh-agent'
-import { CallId } from '@deepseek-ai/dsh-llm'
+import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { ScopeKey } from '@deepseek-ai/dsh-scope'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
@@ -469,7 +469,7 @@ async function envSnapshot(
   try {
     const result = await viewer.ctx.tools.execute({
       signal: new AbortController().signal,
-      callId: CallId(`mcp-live-direnv-${++callSeq}`),
+      callId: ToolCallId(`mcp-live-direnv-${++callSeq}`),
       name: 'mcp__srv__env_snapshot',
       arguments: { names },
       // The registry's scoped lookup (`get`/`view` in dsh-tools) chains by

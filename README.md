@@ -4,19 +4,21 @@
 
 DSH 树外 bundle：把本机原生 direnv 环境应用到显式归属于 Agent/workspace 的 Bash 执行（foreground 与 background）和本地 stdio workspace MCP 行。插件把 `.envrc` 发现、求值、授权 hash、allow/deny、stdlib 与环境变更全部委托给已安装的 `direnv` 可执行文件；它不解析或 source `.envrc`，不维护授权数据库，不调用 `direnv allow`/`permit`/`grant`/`edit`，不使用 `direnv export`，不 watch 或缓存 `.envrc`，不修改 Harness 的 `process.env`，也不向模型暴露 allow/deny 工具。
 
-目标 DSH 为 `0.1.0-rc.6`。本 bundle 依赖 `dsh-workspace-overlay` 提供 canonical workspace scope、workspace-aware MCP manager 与可逆 method wrapper。
+开发与发布验证基线为 DSH service 包 `0.1.5-rc.2`、Cordis `4.0.2` 和 overlay `0.1.1`。本 bundle 依赖 `dsh-workspace-overlay` 提供 canonical workspace scope、workspace-aware MCP manager 与可逆 method wrapper。共享包以 peer 声明，运行时必须复用 Host 的模块实例。
 
 ## 安装
 
 先安装 overlay，再安装本 bundle；系统必须已经安装 `direnv`：
 
 ```sh
-dsh plugin --profile web add /path/to/dsh-workspace-overlay
-dsh plugin --profile web add /path/to/dsh-workspace-envrc
+dsh plugin --profile web add https://github.com/TTTPOB/dsh-workspace-overlay/releases/download/v0.1.1/dsh-workspace-overlay-0.1.1.tgz
+dsh plugin --profile web add https://github.com/TTTPOB/dsh-workspace-envrc/releases/download/v0.1.1/dsh-workspace-envrc-0.1.1.tgz
 dsh --profile web --dump-config
 ```
 
 本 bundle 的 `cordis.patch.yml` 只增加 `workspace-envrc` provider 和 `workspace-envrc-integration` 两行，不修改 overlay 或官方 DSH 行。激活 preflight 会运行 `direnv version` 和一个受限 shim 探针，但不会读取 workspace `.envrc`。
+
+日常使用 Release tarball，避免 `link:` 从开发目录加载另一套 DSH/Cordis。安装后检查模块解析和最终组合，保持 `dsh.profile.bundles` 中 overlay 在 envrc 前，并重启 Host。开发、自动发布和清理流程见 [发布说明](docs/releases.md)。
 
 卸载：
 

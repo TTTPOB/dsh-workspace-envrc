@@ -3,7 +3,7 @@ import AgentRegistry from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { JobId } from '@deepseek-ai/dsh-jobs'
 import LocalJobRegistry from '@deepseek-ai/dsh-jobs-local'
-import { CallId } from '@deepseek-ai/dsh-llm'
+import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { createScope, type Scope, type ScopeKey } from '@deepseek-ai/dsh-scope'
 import * as BashEnvPlugin from '@deepseek-ai/dsh-shell-env'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
@@ -93,7 +93,7 @@ async function setup(config: WorkspaceEnvrcConfig = defaultConfig): Promise<Harn
     bash(agent, args) {
       return ctx.agents.withInitiator(agent, () =>
         ctx.tools.execute({
-          callId: CallId(`call-${++callCounter}`),
+          callId: ToolCallId(`call-${++callCounter}`),
           name: 'bash',
           arguments: args,
           agent,

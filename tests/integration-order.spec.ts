@@ -23,6 +23,13 @@ vi.mock('../src/mcp-adapter.js', async (importOriginal) => {
 const bashInstall = BashAdapter.installWorkspaceEnvrcBashAdapter as unknown as ReturnType<typeof vi.fn>
 const mcpInstall = McpAdapter.installWorkspaceEnvrcMcpAdapter as unknown as ReturnType<typeof vi.fn>
 
+function adapterTestContext(): Context {
+  const ctx = new Context()
+  // Adapters are mocked, but Cordis still requires their declared services.
+  for (const service of Integration.inject) ctx.provide(service, {})
+  return ctx
+}
+
 beforeEach(() => {
   bashInstall.mockReset()
   mcpInstall.mockReset()
@@ -32,7 +39,7 @@ beforeEach(() => {
 
 describe('workspace-envrc-integration plugin adapter ordering', () => {
   it('installs Bash then MCP and disposes MCP before Bash', async () => {
-    const ctx = new Context()
+    const ctx = adapterTestContext()
     const fiber = await ctx.plugin(Integration)
     const bashHandle = bashInstall.mock.results[0]!.value as { dispose: ReturnType<typeof vi.fn> }
     const mcpHandle = mcpInstall.mock.results[0]!.value as { dispose: ReturnType<typeof vi.fn> }
@@ -48,7 +55,7 @@ describe('workspace-envrc-integration plugin adapter ordering', () => {
   })
 
   it('rolls back Bash when MCP installation fails', async () => {
-    const ctx = new Context()
+    const ctx = adapterTestContext()
     const failure = new Error('mcp adapter exploded')
     mcpInstall.mockImplementationOnce(() => { throw failure })
 
