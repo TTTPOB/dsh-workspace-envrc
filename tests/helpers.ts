@@ -10,6 +10,7 @@ import {
   ShellExecutor,
   type ShellExecRequest,
   type ShellExecSpec,
+  type ShellExecution,
   type ShellProcess,
   type ShellProcessRead,
   type ShellRunResult,
@@ -38,6 +39,7 @@ export class RecordingShellExecutor extends ShellExecutor {
       command: request.command,
       workdir: request.workdir ?? '/default-workdir',
       timeoutMs: request.timeoutMs ?? 1000,
+      onExpiry: request.onExpiry ?? 'kill',
       stdoutMaxBytes: request.stdoutMaxBytes ?? 1024,
       ...request.signal !== undefined ? { signal: request.signal } : {},
       ...request.stdin !== undefined ? { stdin: request.stdin } : {},
@@ -66,8 +68,17 @@ export class RecordingShellExecutor extends ShellExecutor {
       signal: null,
       done: Promise.resolve(),
       readOutput: (): ShellProcessRead => ({ delta: '', lossy: false }),
+      observed: {
+        stdout: { readFrom: () => ({ text: '', nextOffset: 0, lossy: false }) },
+        stderr: { readFrom: () => ({ text: '', nextOffset: 0, lossy: false }) },
+      },
       kill: () => false,
     }
+  }
+
+  async execute(spec: ShellExecSpec): Promise<ShellExecution> {
+    const process = this.start(spec)
+    return Object.assign(process, { result: () => this.run(spec) })
   }
 }
 

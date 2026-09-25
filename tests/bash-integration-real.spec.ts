@@ -165,9 +165,9 @@ describe('workspace-envrc Bash adapter over the real tool-bash path', () => {
 
     // The job registry owns the process: read the settled record through the
     // real jobs provider with the exact owner.
-    const { snapshot } = h.ctx.jobs.read(value.jobId as JobId, agent)
+    const snapshot = h.ctx.jobs.get(value.jobId as JobId, agent.session.id)
     expect(snapshot.status).toBe('completed')
-    expect(snapshot.ownerSession).toBe('agent-a')
+    expect(snapshot.owner).toBe('agent-a')
   })
 
   it('keeps two agents in two workspaces isolated across foreground and background', async () => {

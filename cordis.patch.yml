@@ -1,9 +1,9 @@
 # dsh-workspace-envrc bundle patch: register the workspaceEnvrc provider and
 # the Host integration row for Agent-owned Bash and workspace stdio MCP.
 #
-# This bundle DEPENDS on the dsh-workspace-overlay bundle (workspaceCordis
-# service, workspace MCP manager, and public method-wrapper) and must be
-# installed AFTER it. The host must already provide a working `direnv`
+# The personal Web distribution declares overlay before envrc. The rows
+# require overlay's workspaceCordis service, workspace MCP manager, and
+# public method-wrapper. The host must already provide a working `direnv`
 # executable; neither row installs direnv nor runs `direnv allow`.
 #
 # The provider row states every deployed value explicitly because a patch row

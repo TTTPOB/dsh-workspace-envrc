@@ -85,7 +85,7 @@ function fullRequest(command = 'echo hi'): Record<string, unknown> {
     timeoutMs: 42_000,
     stdoutMaxBytes: 4096,
     signal: new AbortController().signal,
-    onExpiry: () => {},
+    onExpiry: 'none',
     stdin: 'stdin-bytes',
     env: { ORDINARY: 'ordinary-value' },
     dshEnv: { DSH_HOME: '/dsh/home', DSH_SESSION_ID: 'sess-1' },
