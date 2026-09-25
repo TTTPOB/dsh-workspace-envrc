@@ -8,21 +8,11 @@ The development and release baseline is DSH service packages `0.1.5-rc.2`, Cordi
 
 ## Installation
 
-Install the overlay first, then this bundle. The host must already provide `direnv`:
-
-```sh
-dsh plugin --profile web add https://github.com/TTTPOB/dsh-workspace-overlay/releases/download/v0.1.1/dsh-workspace-overlay-0.1.1.tgz
-dsh plugin --profile web add https://github.com/TTTPOB/dsh-workspace-envrc/releases/download/v0.1.1/dsh-workspace-envrc-0.1.1.tgz
-dsh --profile web --dump-config
-```
+Install overlay and envrc as ordinary dependencies in the resolving profile (`autoInstallPeers: false`); declare their shared rows, overlay before envrc, in `$DSH_HOME/cordis.patch.yml`. This profile is the resolution location, not a Web-specific scope. Keep daily bundles to official base/Web app rather than auto-appending these bundle patches and duplicating the shared rows. The host must already provide `direnv`.
 
 The bundle patch adds only the `workspace-envrc` provider and `workspace-envrc-integration` rows. Activation runs `direnv version` and a bounded shim probe but reads no workspace `.envrc`.
 
-To uninstall:
-
-```sh
-dsh plugin --profile web remove dsh-workspace-envrc
-```
+To uninstall, remove the shared envrc rows from `$DSH_HOME/cordis.patch.yml` and its ordinary profile dependency.
 
 ## Native direnv semantics
 

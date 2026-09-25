@@ -8,7 +8,7 @@ DSH 树外 bundle：把本机原生 direnv 环境应用到显式归属于 Agent/
 
 ## 集成
 
-个人 Web 发行包直接依赖 overlay 与 envrc，并在自身 patch 中依次声明 overlay 的 `workspace-registry`、`workspace-mcp-manager`、`workspace-agent-integration`，以及本包的 `workspace-envrc`、`workspace-envrc-integration` 两行。日用 profile 不管理这些插件依赖；系统须安装 `direnv`，激活 preflight 检查其版本及 shim，但不读取 workspace `.envrc`。隔离安装后检查模块解析和最终组合；不要修改运行中的 Host。
+overlay 与 envrc 由解析这些共用插件的 profile 普通 dependencies 安装（`autoInstallPeers: false`），在 `$DSH_HOME/cordis.patch.yml` 中依次声明 overlay 的 `workspace-registry`、`workspace-mcp-manager`、`workspace-agent-integration`，以及本包的 `workspace-envrc`、`workspace-envrc-integration` 两行。日用 bundles 只保留官方 base／Web app，不自动追加两个独立 bundle 造成重复插入；系统须安装 `direnv`，激活 preflight 检查其版本及 shim，但不读取 workspace `.envrc`。隔离安装后检查模块解析和最终组合；不要修改运行中的 Host。
 
 ## 原生 direnv 语义
 

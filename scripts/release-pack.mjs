@@ -34,8 +34,8 @@ writeFileSync(join(destination, 'release-notes.md'), [
   '',
   'Validated against DSH 0.1.7-rc.2, Agent/preset-registry fork1, overlay 0.2.0, Cordis 4.0.4 and Schemastery 3.18.4.',
   '',
-  'The personal Web distribution directly depends on both workspace packages and declares overlay rows before envrc rows.',
-  'The Host requires direnv; do not install this package as a profile dependency.',
+  'Install both independent workspace plugins as ordinary dependencies in the resolving profile (autoInstallPeers: false); declare shared overlay rows before envrc rows in $DSH_HOME/cordis.patch.yml.',
+  'The Host requires direnv; keep daily bundles to official base/Web app and avoid duplicate automatic bundle rows.',
   '',
 ].join('\n'))
 console.log(`Verified ${tarball}: ${entries.length} entries, SHA-256 ${digest}`)
