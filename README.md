@@ -4,7 +4,7 @@
 
 DSH 树外 bundle：把本机原生 direnv 环境应用到显式归属于 Agent/workspace 的 Bash 执行（foreground 与 background）和本地 stdio workspace MCP 行。插件把 `.envrc` 发现、求值、授权 hash、allow/deny、stdlib 与环境变更全部委托给已安装的 `direnv` 可执行文件；它不解析或 source `.envrc`，不维护授权数据库，不调用 `direnv allow`/`permit`/`grant`/`edit`，不使用 `direnv export`，不 watch 或缓存 `.envrc`，不修改 Harness 的 `process.env`，也不向模型暴露 allow/deny 工具。
 
-开发与发布验证基线为 DSH service 包 `0.1.7-rc.2`、Cordis `4.0.4`、Schemastery `3.18.4` 和 overlay `0.2.0`。本 bundle 依赖 `dsh-workspace-overlay` 提供 canonical workspace scope、workspace-aware MCP manager 与可逆 method wrapper。共享包以 peer 声明，运行时必须复用 Host 的模块实例。
+开发与发布验证基线为 DSH service 包 `0.1.7-rc.2`、Cordis `4.0.4`、Schemastery `3.18.4` 和 overlay `0.2.0`。本 bundle 依赖 `dsh-workspace-overlay` 提供 canonical workspace scope、workspace-aware MCP manager 与可逆 method wrapper。共享包以 peer 声明；构建与测试以官方 0.1.7-rc.2 基线依赖配合 Agent/preset registry fork1 及 overlay 0.2.0 tarball override，运行时必须复用 Host 的模块实例。overlay 0.2.0 尚未发布，因此源码库不提交无法解析的锁文件；开发/CI 先提供已构建的 overlay 和 DSH seam tarball 并显式 override，再执行 `pnpm install --no-frozen-lockfile` 生成本次构建锁。缺少这些构建输入时必须报错；部署闭包的 lock 由最终集成安装拥有。
 
 ## 集成
 
