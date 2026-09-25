@@ -85,6 +85,7 @@ function fullRequest(command = 'echo hi'): Record<string, unknown> {
     timeoutMs: 42_000,
     stdoutMaxBytes: 4096,
     signal: new AbortController().signal,
+    onExpiry: () => {},
     stdin: 'stdin-bytes',
     env: { ORDINARY: 'ordinary-value' },
     dshEnv: { DSH_HOME: '/dsh/home', DSH_SESSION_ID: 'sess-1' },
@@ -122,6 +123,7 @@ describe('installWorkspaceEnvrcBashAdapter', () => {
       expect(recorded.timeoutMs).toBe(42_000)
       expect(recorded.stdoutMaxBytes).toBe(4096)
       expect(recorded.signal).toBe(request.signal)
+      expect(recorded.onExpiry).toBe(request.onExpiry)
       expect(recorded.stdin).toBe('stdin-bytes')
       expect(recorded.env).toBe(request.env)
       expect(recorded.dshEnv).toBe(request.dshEnv)

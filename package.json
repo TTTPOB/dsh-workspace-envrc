@@ -1,6 +1,6 @@
 {
   "name": "dsh-workspace-envrc",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "packageManager": "pnpm@11.24.0",
   "description": "Out-of-tree DSH bundle: applies the local machine's native direnv environment to explicitly Agent/workspace-owned Bash executions and local stdio workspace MCP rows. Depends on dsh-workspace-overlay; requires a host-installed direnv; never calls allow/deny or reads .envrc itself.",
   "keywords": [
@@ -66,35 +66,35 @@
     "node": "^22.19.0 || >=24.0.0"
   },
   "peerDependencies": {
-    "@deepseek-ai/cordis": "^4.0.2",
-    "@deepseek-ai/dsh-agent": "^0.1.5-rc.2",
-    "@deepseek-ai/dsh-scope": "^0.1.5-rc.2",
-    "@deepseek-ai/dsh-shell": "^0.1.5-rc.2",
-    "@deepseek-ai/dsh-timeout": "^0.1.5-rc.2",
-    "dsh-workspace-overlay": "^0.1.1"
+    "@deepseek-ai/cordis": "^4.0.4",
+    "@deepseek-ai/dsh-agent": "^0.1.7-rc.2",
+    "@deepseek-ai/dsh-scope": "^0.1.7-rc.2",
+    "@deepseek-ai/dsh-shell": "^0.1.7-rc.2",
+    "@deepseek-ai/dsh-timeout": "^0.1.7-rc.2",
+    "dsh-workspace-overlay": "^0.2.0"
   },
   "dependencies": {
-    "@deepseek-ai/schemastery": "^3.18.2"
+    "@deepseek-ai/schemastery": "^3.18.4"
   },
   "devDependencies": {
-    "@deepseek-ai/cordis": "4.0.2",
-    "@deepseek-ai/cordis-plugin-include": "1.0.7",
-    "@deepseek-ai/cordis-plugin-loader": "1.0.3",
-    "@deepseek-ai/dsh-agent": "0.1.5-rc.2",
-    "@deepseek-ai/dsh-jobs": "0.1.5-rc.2",
-    "@deepseek-ai/dsh-jobs-local": "0.1.5-rc.2",
-    "@deepseek-ai/dsh-llm": "0.1.5-rc.2",
-    "@deepseek-ai/dsh-scope": "0.1.5-rc.2",
-    "@deepseek-ai/dsh-shell": "0.1.5-rc.2",
-    "@deepseek-ai/dsh-shell-env": "0.1.5-rc.2",
-    "@deepseek-ai/dsh-system-prompt": "0.1.5-rc.2",
-    "@deepseek-ai/dsh-timeout": "0.1.5-rc.2",
-    "@deepseek-ai/dsh-tool-bash": "0.1.5-rc.2",
-    "@deepseek-ai/dsh-tools": "0.1.5-rc.2",
+    "@deepseek-ai/cordis": "4.0.4",
+    "@deepseek-ai/cordis-plugin-include": "1.0.9",
+    "@deepseek-ai/cordis-plugin-loader": "1.0.5",
+    "@deepseek-ai/dsh-agent": "0.1.7-rc.2",
+    "@deepseek-ai/dsh-jobs": "0.1.7-rc.2",
+    "@deepseek-ai/dsh-jobs-local": "0.1.7-rc.2",
+    "@deepseek-ai/dsh-llm": "0.1.7-rc.2",
+    "@deepseek-ai/dsh-scope": "0.1.7-rc.2",
+    "@deepseek-ai/dsh-shell": "0.1.7-rc.2",
+    "@deepseek-ai/dsh-shell-env": "0.1.7-rc.2",
+    "@deepseek-ai/dsh-system-prompt": "0.1.7-rc.2",
+    "@deepseek-ai/dsh-timeout": "0.1.7-rc.2",
+    "@deepseek-ai/dsh-tool-bash": "0.1.7-rc.2",
+    "@deepseek-ai/dsh-tools": "0.1.7-rc.2",
     "@modelcontextprotocol/sdk": "^1.12.0",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^24.0.0",
-    "dsh-workspace-overlay": "https://github.com/TTTPOB/dsh-workspace-overlay/releases/download/v0.1.1/dsh-workspace-overlay-0.1.1.tgz",
+    "dsh-workspace-overlay": "0.2.0",
     "js-yaml": "^4.1.0",
     "typescript": "^5.9.0",
     "vitest": "^3.2.0"
