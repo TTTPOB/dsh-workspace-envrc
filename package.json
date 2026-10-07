@@ -60,14 +60,17 @@
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json",
     "build": "pnpm clean && tsc -p tsconfig.json",
     "test": "pnpm build && vitest run",
-    "release:pack": "node scripts/release-pack.mjs"
+    "release:pack": "node scripts/release-pack.mjs",
+    "prepare:release": "node .github/scripts/prepare-dependencies.mjs",
+    "verify:dependencies": "node .github/scripts/verify-dependencies.mjs",
+    "verify:consumer": "node .github/scripts/verify-consumer.mjs"
   },
   "engines": {
     "node": "^22.19.0 || >=24.0.0"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.4",
-    "@deepseek-ai/dsh-agent": "0.1.7-rc.2",
+    "@deepseek-ai/dsh-agent": "0.1.7-rc.2-fork1",
     "@deepseek-ai/dsh-scope": "0.1.7-rc.2",
     "@deepseek-ai/dsh-shell": "0.1.7-rc.2",
     "@deepseek-ai/dsh-timeout": "0.1.7-rc.2",
@@ -99,7 +102,8 @@
     "dsh-workspace-overlay": "0.2.0",
     "js-yaml": "^4.1.0",
     "typescript": "^5.9.0",
-    "vitest": "^3.2.0"
+    "vitest": "^3.2.0",
+    "@deepseek-ai/dsh-app-boot": "0.1.7-rc.2"
   },
   "license": "MIT"
 }
