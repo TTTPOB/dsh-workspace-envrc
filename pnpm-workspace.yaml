@@ -4,3 +4,4 @@ allowBuilds:
 overrides:
   "@deepseek-ai/dsh-agent": "https://github.com/TTTPOB/deepseek-harness/releases/download/daily-driver-v0.1.7-rc.2-fork13/deepseek-ai-dsh-agent-0.1.7-rc.2-fork1.tgz"
   "@deepseek-ai/dsh-agent-preset-registry": "https://github.com/TTTPOB/deepseek-harness/releases/download/daily-driver-v0.1.7-rc.2-fork13/deepseek-ai-dsh-agent-preset-registry-0.1.7-rc.2-fork1.tgz"
+  "dsh-workspace-overlay": "https://github.com/TTTPOB/dsh-workspace-overlay/releases/download/v0.2.0/dsh-workspace-overlay-0.2.0.tgz"

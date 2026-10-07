@@ -11,7 +11,7 @@
     },
     "dsh-workspace-overlay": {
       "version": "0.2.0",
-      "source": null
+      "source": "https://github.com/TTTPOB/dsh-workspace-overlay/releases/download/v0.2.0/dsh-workspace-overlay-0.2.0.tgz"
     }
   }
 }
