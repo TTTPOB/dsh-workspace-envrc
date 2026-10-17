@@ -133,6 +133,34 @@ describe('installWorkspaceEnvrcBashAdapter', () => {
     }
   })
 
+  it('keeps the original workspace environment after command workdir changes', async () => {
+    const h = await harness()
+    try {
+      const workspaceKey: ScopeKey = {}
+      const otherWorkspaceKey: ScopeKey = {}
+      h.registry.set(workspaceKey, '/workspaces/original')
+      h.registry.set(otherWorkspaceKey, '/workspaces/other')
+      const { agent } = h.scopedAgent({}, workspaceKey)
+      h.agents.currentInitiator = () => agent
+      const handle = h.install()
+      try {
+        for (const workdir of ['/workspaces/original', '/workspaces/other', '/outside']) {
+          h.ctx.shell.resolve(asRequest({ command: 'pwd', workdir }))
+        }
+      } finally {
+        handle.dispose()
+      }
+      expect(h.executor.records.map(record => record.request.workdir)).toEqual([
+        '/workspaces/original', '/workspaces/other', '/outside',
+      ])
+      for (const { request } of h.executor.records) {
+        expect(request.command).toBe(h.ctx.workspaceEnvrc.wrapCommand('/workspaces/original', 'pwd', {}))
+      }
+    } finally {
+      await h.dispose()
+    }
+  })
+
   it('never mutates the caller request object', async () => {
     const h = await harness()
     try {

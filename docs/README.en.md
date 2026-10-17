@@ -4,12 +4,14 @@
 
 An out-of-tree DSH bundle that applies the local machine's native direnv environment to explicitly Agent/workspace-owned Bash executions (foreground and background) and local stdio workspace MCP rows. It delegates `.envrc` discovery, evaluation, authorization hashes, allow/deny state, stdlib behavior, and environment changes to the installed `direnv` executable. It does not parse or source `.envrc`, maintain authorization state, call `direnv allow`/`permit`/`grant`/`edit`, use `direnv export`, watch or cache `.envrc`, mutate the Harness `process.env`, or expose an allow/deny tool to models.
 
-The development and release baseline is DSH `0.1.7-rc.2`, Agent/preset-registry `0.1.7-rc.2-fork1`, Cordis `4.0.4`, Schemastery `3.18.4`, and overlay `0.2.0`. The bundle consumes overlay for canonical workspace scopes, the workspace-aware MCP manager, and reversible method wrappers. Shared peers resolve to the Host module instances; see Release validation for exact source assets.
+The development and release baseline is DSH `0.2.1-rc.1`, Agent/preset-registry `0.2.1-rc.1-fork1`, Cordis `4.0.5`, Schemastery `3.18.5`, and overlay `0.3.0`. The bundle consumes overlay for canonical workspace scopes, the workspace-aware MCP manager, and reversible method wrappers. Shared peers resolve to the Host module instances; see Release validation for exact source assets.
 
 
 ## Release validation
 
-[Validate and release](../.github/workflows/release.yml) and local checks share `pnpm prepare:release`. The [dependency contract](../.github/release-dependencies.json) fixes Agent/preset-registry fork1 and overlay `0.2.0`; the registry is consumed through overlay, not an added envrc service peer. Unset asset URLs block preparation. Publish the core assets and overlay first, then record exact immutable URLs in the contract/workspace overrides and generate the source lockfile with pnpm. Official llm stays at `0.1.7-rc.2`.
+For an isolated local consumer check, set `DSH_RELEASE_DEPENDENCIES=/absolute/contract.json` to a contract with the same structure and `file:` tarball sources. The fixture grants exemptions only for that contract's `baseline`, never the old runtime. Public release preparation still rejects missing published sources.
+
+[Validate and release](../.github/workflows/release.yml) and local checks share `pnpm prepare:release`. The [dependency contract](../.github/release-dependencies.json) fixes Agent/preset-registry fork1 and overlay `0.3.0`; the registry is consumed through overlay, not an added envrc service peer. Unset asset URLs block preparation. Publish the core assets and overlay first, then record exact immutable URLs in the contract/workspace overrides and generate the source lockfile with pnpm. Official llm stays at `0.2.1-rc.1`.
 
 `node .github/scripts/prepare-local.mjs <inputs.json>` checks the local tarballs named by the input package-to-path map and prepares `.artifacts/local-source` for diagnostics only. `pnpm verify:consumer` validates packed exports and real Loader activation through the official resolver with Host-shared peers and a plugin-only profile (`autoInstallPeers: false`). It checks rejection of fork-only peers before granting an exact exemption to its isolated package-version/runtime pair. Native direnv tests operate only on disposable fixtures; no Host is launched.
 

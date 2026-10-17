@@ -56,6 +56,10 @@ async function setup(config: WorkspaceEnvrcConfig = defaultConfig): Promise<Harn
   ctx.jobs.attachController('envrc-real-test')
   fibers.push(await ctx.plugin(BashEnvPlugin))
   fibers.push(await ctx.plugin(RecordingShellExecutor))
+  // Directory validation belongs to the working-directory provider, not this adapter.
+  ctx.provide('workingDirectory', {
+    ensure: async (agent: Agent) => agent.session.header.cwd,
+  })
   fibers.push(await ctx.plugin(ToolBash))
   ctx.provide('workspaceCordis', registry)
   // The integration row injects the MCP manager; this Bash harness never
