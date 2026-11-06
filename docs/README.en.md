@@ -13,7 +13,7 @@ For an isolated local consumer check, set `DSH_RELEASE_DEPENDENCIES=/absolute/co
 
 [Validate and release](../.github/workflows/release.yml) and local checks share `pnpm prepare:release`. The [dependency contract](../.github/release-dependencies.json) fixes Agent/preset-registry fork1 and overlay `0.4.0`; the registry is consumed through overlay, not an added envrc service peer. Unset asset URLs block preparation. Publish the core assets and overlay first, then record exact immutable URLs in the contract/workspace overrides and generate the source lockfile with pnpm. Official llm stays at `0.2.2-rc.1`.
 
-`node .github/scripts/prepare-local.mjs <inputs.json>` checks the local tarballs named by the input package-to-path map and prepares `.artifacts/local-source` for diagnostics only. `pnpm verify:consumer` validates packed exports and real Loader activation through the official resolver with Host-shared peers and a plugin-only profile (`autoInstallPeers: false`). The temporary fixture keeps Node ancestor lookup away from the source checkout. Native direnv tests operate only on disposable fixtures; no Host is launched.
+`node .github/scripts/prepare-local.mjs <inputs.json>` checks the local tarballs named by the input package-to-path map and prepares `.artifacts/local-source` for diagnostics only. `pnpm verify:consumer` validates packed exports and real Loader activation through the official resolver with Host-shared peers and a plugin-only profile (`autoInstallPeers: false`). The temporary fixture keeps Node ancestor lookup away from the source checkout. Schemastery is a plugin-owned runtime dependency, not a Host-shared peer. Native direnv tests operate only on disposable fixtures; no Host is launched.
 
 ## Installation
 

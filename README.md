@@ -13,7 +13,7 @@ DSH 树外 bundle：把本机原生 direnv 环境应用到显式归属于 Agent/
 
 [Validate and release](.github/workflows/release.yml) 与本地共用 `pnpm prepare:release`。[依赖合同](.github/release-dependencies.json) 固定 Agent/preset-registry fork1 和 overlay `0.4.0`；registry 由 overlay 消费，不新增 envrc 服务 peer。缺少正式资产 URL 时准备立即失败；先发布核心资产和 overlay，再把精确不可变 URL 写入合同/workspace overrides，由 pnpm 生成 source 锁文件。llm 保持官方 `0.2.2-rc.1`。
 
-`node .github/scripts/prepare-local.mjs <inputs.json>` 检查输入 JSON 中包名对应的本地 tarball，在 `.artifacts/local-source` 准备仅供诊断的副本。`pnpm verify:consumer` 在插件专属 profile（`autoInstallPeers: false`）与 Host 共享 peers 组合下，使用正式解析器检查打包入口和真实 Loader 激活，；临时目录隔离源码 checkout 的 Node 祖先解析。原生 direnv 测试只操作临时 fixture；不启动 Host。
+`node .github/scripts/prepare-local.mjs <inputs.json>` 检查输入 JSON 中包名对应的本地 tarball，在 `.artifacts/local-source` 准备仅供诊断的副本。`pnpm verify:consumer` 在插件专属 profile（`autoInstallPeers: false`）与 Host 共享 peers 组合下，使用正式解析器检查打包入口和真实 Loader 激活；Schemastery 由插件运行依赖安装，不要求与 Host 共享实例；临时目录隔离源码 checkout 的 Node 祖先解析。原生 direnv 测试只操作临时 fixture；不启动 Host。
 
 ## 集成
 
