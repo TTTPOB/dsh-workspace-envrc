@@ -62,10 +62,12 @@ import { Context, LoggerService } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import Include from '@deepseek-ai/cordis-plugin-include'
 import { AgentRegistry } from '@deepseek-ai/dsh-agent'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { ScopeKey } from '@deepseek-ai/dsh-scope'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
+import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { execFileSync, spawn } from 'node:child_process'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -308,6 +310,7 @@ async function makeCase(options: { enableWorkspaceMcp?: boolean } = {}): Promise
   ctx.loader.builtins.include = Include
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
+  await ctx.plugin(NativeToolExecutor)
   const registryConfig: WorkspaceRegistryConfig = {
     trustWorkspaceConfig: true,
     watchWorkspaceConfig: true,
@@ -315,6 +318,7 @@ async function makeCase(options: { enableWorkspaceMcp?: boolean } = {}): Promise
   }
   await ctx.plugin(WorkspaceRegistry, registryConfig)
   await ctx.plugin(WorkspaceMcpManager)
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(RecordingShellExecutor)
   const providerConfig: WorkspaceEnvrcConfig = {
@@ -469,16 +473,13 @@ async function envSnapshot(
   try {
     const result = await viewer.ctx.tools.execute({
       signal: new AbortController().signal,
-      callId: ToolCallId(`mcp-live-direnv-${++callSeq}`),
-      name: 'mcp__srv__env_snapshot',
-      arguments: { names },
-      // The registry's scoped lookup (`get`/`view` in dsh-tools) chains by
-      // ScopeKey: the exec `agent` value is used DIRECTLY as the scope-chain
-      // key, so a workspace tool call must carry the workspace ScopeKey (the
-      // official loop's Agent object is not dereferenced in rc.6 — a finding
-      // this suite documents rather than works around).
+      calls: [{
+        type: 'tool-call', id: ToolCallId(`mcp-live-direnv-${++callSeq}`),
+        name: 'mcp__srv__env_snapshot', arguments: JSON.stringify({ names }),
+      }],
       ...(scope !== undefined ? { agent: scope as never } : {}),
-    })
+    }).then(batch => batch.results[0]!.result)
+
     if (result.isError) {
       throw new Error(`env_snapshot failed: ${String(result.error?.message ?? result.error)}`)
     }

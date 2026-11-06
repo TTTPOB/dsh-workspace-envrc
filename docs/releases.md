@@ -1,7 +1,9 @@
 # 构建与交付
 
-overlay `0.3.0` 与本包 `0.3.0` 作为独立插件由解析它们的 profile 普通 dependencies 安装（`autoInstallPeers: false`），共用插件行在 `$DSH_HOME/cordis.patch.yml` 中按 overlay 后 envrc 的顺序声明。首次构建和交付由 DSH 主 pipeline 负责；本库不在 push、PR 或 tag 上独立发布，不修改日用 profile 或 Host。
+本包要求 Node >=24.9、DSH 0.2.2-rc.1、Cordis 4.1.0，并与 overlay 0.4.x 配套交付。Shell/scope 服务接口没有变化；Bash 与 MCP 回归使用独立 native executor 插件和批量 `tools.execute` 接口，不启动 Host。
 
-开发和 CI 须先准备新 Agent、preset registry `fork1` 与 overlay `0.3.0` 构建产物。以官方 DSH `0.2.1-rc.1` 作为普通开发依赖基线，在隔离工作树对三项注入 tarball overrides 后执行 `pnpm install --no-frozen-lockfile`、聚焦类型检查、Bash/MCP 测试、`tsc` 构建和 `pnpm pack`。overlay `0.3.0` 未发布，无法解析可移植开发锁，因此本库不提交旧锁或绝对本机 `file:` 路径；缺少构建输入就停止，不回退到旧 overlay API。
+普通开发依赖以 npm 官方 0.2.2-rc.1 为基线。完整组合仍需 Agent/preset registry 0.2.2-rc.1-fork1 及新 overlay tarball。`.github/release-dependencies.json` 中这些资产的 `source` 保持 `null`，阻止在依赖未就绪时发布。source 锁文件暂以旧 overlay 0.3.0 正式资产引导类型依赖，并 override 其 DSH peers 到新基线；它不能作为升级后组合行为通过的证据。新 overlay 的本地消费验证必须在隔离副本中替换该资产。
 
-最终安装闭包的 lockfile 由 DSH 集成环境拥有。验证构建后 ESM 入口实际解析到相同 Cordis/Agent 身份，并在隔离 Host 检查 Bash、stdio MCP 和配置 reload；日用 Host 的发布与切换不在本包任务范围内。
+取得本地产物后，将包名到 tarball 的映射写入忽略目录下的 JSON，运行 `node .github/scripts/prepare-local.mjs <映射文件>`，在生成的 `.artifacts/local-source` 隔离副本执行 `pnpm typecheck && pnpm test && pnpm release:pack && pnpm verify:consumer`。测试保留 foreground/background Bash、原生 direnv 授权、workspace MCP 及真实 Loader composition；缺少 fork 包时标记**待 fork 包**，不删除测试。
+
+正式交付顺序为 fork DSH 包 → overlay 0.4.0 → envrc 0.4.0。等待 overlay Actions Release 资产后填入正式 URL，并用 pnpm 重新生成可移植锁文件；不得提交本机 `file:` 路径，不覆盖旧 Release。两个插件由 profile 普通 dependencies 安装（`autoInstallPeers: false`），共用插件行按 overlay 后 envrc 的顺序声明。本任务不修改真实 profile 或启停 Host。

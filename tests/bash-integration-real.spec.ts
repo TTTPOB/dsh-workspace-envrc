@@ -1,5 +1,7 @@
+import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { Context, type Fiber } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { JobId } from '@deepseek-ai/dsh-jobs'
 import LocalJobRegistry from '@deepseek-ai/dsh-jobs-local'
@@ -49,6 +51,8 @@ async function setup(config: WorkspaceEnvrcConfig = defaultConfig): Promise<Harn
   const scopes: Scope[] = []
   fibers.push(await ctx.plugin(SystemPrompt))
   fibers.push(await ctx.plugin(ToolRuntime))
+  fibers.push(await ctx.plugin(NativeToolExecutor))
+  fibers.push(await ctx.plugin(SessionProjectionRegistry))
   fibers.push(await ctx.plugin(AgentRegistry))
   fibers.push(await ctx.plugin(LocalJobRegistry))
   // A controller attached from the unscoped host serves every owner, which is
@@ -97,12 +101,10 @@ async function setup(config: WorkspaceEnvrcConfig = defaultConfig): Promise<Harn
     bash(agent, args) {
       return ctx.agents.withInitiator(agent, () =>
         ctx.tools.execute({
-          callId: ToolCallId(`call-${++callCounter}`),
-          name: 'bash',
-          arguments: args,
-          agent,
-          signal: new AbortController().signal,
-        }),
+      signal: new AbortController().signal,
+      agent: agent,
+      calls: [{ type: 'tool-call', id: ToolCallId(`call-${++callCounter}`), name: 'bash', arguments: JSON.stringify(args) }],
+    }).then(batch => batch.results[0]!.result),
       )
     },
     async dispose() {

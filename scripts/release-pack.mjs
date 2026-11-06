@@ -32,7 +32,7 @@ writeFileSync(join(destination, 'SHA256SUMS'), `${digest}  ${filename}\n`)
 writeFileSync(join(destination, 'release-notes.md'), [
   `Prebuilt ${pkg.name} ${pkg.version}.`,
   '',
-  'Validated against DSH 0.1.7-rc.2, Agent/preset-registry fork1, overlay 0.2.0, Cordis 4.0.4 and Schemastery 3.18.4.',
+  'Runtime requirements and validation status: see docs/releases.md in the archive.',
   '',
   'Install both independent workspace plugins as ordinary dependencies in the resolving profile (autoInstallPeers: false); declare shared overlay rows before envrc rows in $DSH_HOME/cordis.patch.yml.',
   'The Host requires direnv; keep daily bundles to official base/Web app and avoid duplicate automatic bundle rows.',
