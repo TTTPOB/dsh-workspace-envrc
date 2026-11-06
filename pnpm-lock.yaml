@@ -25,9 +25,6 @@ importers:
 
   .:
     dependencies:
-      '@deepseek-ai/schemastery':
-        specifier: 3.19.0
-        version: 3.19.0
       dsh-workspace-overlay:
         specifier: https://github.com/TTTPOB/dsh-workspace-overlay/releases/download/v0.3.0/dsh-workspace-overlay-0.3.0.tgz
         version: https://github.com/TTTPOB/dsh-workspace-overlay/releases/download/v0.3.0/dsh-workspace-overlay-0.3.0.tgz(423ead221fc02fe315f1afc36543761f)
@@ -92,6 +89,9 @@ importers:
       '@deepseek-ai/dsh-tools':
         specifier: 0.2.2-rc.1
         version: 0.2.2-rc.1(a13a0f05e8644f33708fe2540ec79e5a)
+      '@deepseek-ai/schemastery':
+        specifier: 3.19.0
+        version: 3.19.0
       '@modelcontextprotocol/sdk':
         specifier: ^1.12.0
         version: 1.32.1(zod@4.6.7)

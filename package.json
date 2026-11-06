@@ -74,11 +74,10 @@
     "@deepseek-ai/dsh-scope": "0.2.2-rc.1",
     "@deepseek-ai/dsh-shell": "0.2.2-rc.1",
     "@deepseek-ai/dsh-timeout": "0.2.2-rc.1",
-    "dsh-workspace-overlay": "^0.4.0"
-  },
-  "dependencies": {
+    "dsh-workspace-overlay": "^0.4.0",
     "@deepseek-ai/schemastery": "3.19.0"
   },
+  "dependencies": {},
   "devDependencies": {
     "@deepseek-ai/cordis": "4.1.0",
     "@deepseek-ai/cordis-plugin-include": "1.1.0",
@@ -106,7 +105,8 @@
     "vitest": "^3.2.0",
     "@deepseek-ai/dsh-app-boot": "0.2.2-rc.1",
     "@deepseek-ai/dsh-agent-preset-registry": "0.2.2-rc.1",
-    "@deepseek-ai/dsh-tool-executor-native": "0.2.2-rc.1"
+    "@deepseek-ai/dsh-tool-executor-native": "0.2.2-rc.1",
+    "@deepseek-ai/schemastery": "3.19.0"
   },
   "license": "MIT"
 }
